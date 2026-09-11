@@ -22,7 +22,9 @@ export class LobbyView {
         <!-- Lobby Hero Header -->
         <header class="lobby-header">
           <div class="brand-badge">
-            <span class="brand-crest">♠️ 🪙 🍷 🪵</span>
+            <div class="brand-avatar-wrapper">
+              <img src="/icons/icon-192.png" alt="Piuccia Games" class="brand-avatar-img" />
+            </div>
             <div class="brand-text">
               <h1 class="brand-title">Piuccia Games</h1>
               <p class="brand-tagline">I grandi classici della tradizione da tavolo e di carte</p>
