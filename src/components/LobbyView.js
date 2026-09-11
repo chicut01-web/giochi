@@ -24,7 +24,7 @@ export class LobbyView {
           <div class="brand-badge">
             <span class="brand-crest">♠️ 🪙 🍷 🪵</span>
             <div class="brand-text">
-              <h1 class="brand-title">Circolo dei Giochi Italiani</h1>
+              <h1 class="brand-title">Piuccia Games</h1>
               <p class="brand-tagline">I grandi classici della tradizione da tavolo e di carte</p>
             </div>
           </div>

@@ -1,7 +1,7 @@
 {
-  "name": "Circolo dei Giochi Italiani",
-  "short_name": "Giochi",
-  "description": "I grandi classici della tradizione italiana: Scopa, Briscola, Tresette e Sette e Mezzo online gratis.",
+  "name": "Piuccia Games",
+  "short_name": "Piuccia Games",
+  "description": "Piuccia Games - I grandi classici della tradizione italiana: Scopa, Briscola, Tresette e Sette e Mezzo online gratis.",
   "id": "/",
   "start_url": "/?source=pwa",
   "scope": "/",
@@ -49,7 +49,7 @@
     {
       "name": "Partita a Scopa",
       "short_name": "Scopa",
-      "description": "Avvia subito una partita a Scopa classica",
+      "description": "Avvia subito una partita a Scopa su Piuccia Games",
       "url": "/?game=scopa",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }

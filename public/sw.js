@@ -1,5 +1,5 @@
-// Circolo dei Giochi Italiani - Service Worker
-const CACHE_NAME = 'giochi-pwa-v1';
+// Piuccia Games - Service Worker
+const CACHE_NAME = 'piuccia-games-v1';
 
 const CORE_ASSETS = [
   '/',
