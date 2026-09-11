@@ -36,9 +36,9 @@ export class ScopaView {
       <div class="scopa-arena" id="scopa-arena">
         <!-- Top Navigation, Score Bar, and Turn Timer -->
         <header class="scopa-header">
-          <button class="scopa-btn icon-btn" id="scopa-back-btn" title="Torna ai Giochi">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-            <span>Lobby</span>
+          <button class="scopa-btn icon-btn" id="scopa-back-btn" title="Torna alla Lobby">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            <span class="btn-text">Lobby</span>
           </button>
 
           <div class="scoreboard-pill">
@@ -47,7 +47,7 @@ export class ScopaView {
               <span class="team-score" id="score-player">0</span>
             </div>
             <div class="score-divider">
-              <span class="target-badge" id="target-badge">Obiettivo: ${this.engine.targetScore}</span>
+              <span class="target-badge" id="target-badge"><span class="target-label">Obiettivo: </span>${this.engine.targetScore} pt</span>
             </div>
             <div class="score-team cpu-team">
               <span class="team-score" id="score-cpu">0</span>
@@ -75,7 +75,8 @@ export class ScopaView {
               <span id="sound-icon">${soundFx.isMuted() ? '🔇' : '🔊'}</span>
             </button>
             <button class="scopa-btn icon-btn" id="scopa-rules-btn" title="Regole della Scopa">
-              <span>📖 Regole</span>
+              <span class="btn-icon">📖</span>
+              <span class="btn-text">Regole</span>
             </button>
           </div>
         </header>
@@ -517,6 +518,10 @@ export class ScopaView {
       return;
     }
 
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(15); } catch (e) {}
+    }
+
     const card = this.engine.playerHand.find(c => c.id === cardId);
     if (!card) return;
 
@@ -623,8 +628,11 @@ export class ScopaView {
       // Ample time for the user to clearly see the played card and target cards highlighted
       await new Promise(r => setTimeout(r, 1100));
 
-      // Audio feedback
+      // Audio and haptic feedback
       soundFx.playCapture();
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(28); } catch (e) {}
+      }
       if (capturedCards.some(c => c.isSettebello || c.suit === 'denari') || card.isSettebello) {
         soundFx.playCoin();
       }
@@ -717,6 +725,9 @@ export class ScopaView {
   // Scopa celebration fanfare
   triggerScopaCelebration(text) {
     soundFx.playScopa();
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate([60, 40, 60, 40, 120]); } catch (e) {}
+    }
     const banner = document.getElementById('scopa-banner');
     if (banner) {
       const sub = banner.querySelector('.scopa-banner-sub');
