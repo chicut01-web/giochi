@@ -1,6 +1,7 @@
 // Supabase Authentication Manager for Piuccia Games
 
 import { supabase } from './supabaseClient.js';
+import { validatePassword, validateUsername } from '../utils/validators.js';
 
 class AuthManager {
   constructor() {
@@ -19,6 +20,9 @@ class AuthManager {
       }
       this.currentSession = session;
       this.currentUser = session?.user || null;
+      if (this.currentUser) {
+        this.syncProfile();
+      }
     } catch (err) {
       console.warn('[AuthManager] Inizializzazione sessione fallita:', err);
     } finally {
@@ -31,8 +35,25 @@ class AuthManager {
       console.log(`[AuthManager] Evento Auth: ${event}`);
       this.currentSession = session;
       this.currentUser = session?.user || null;
+      if (this.currentUser) {
+        this.syncProfile();
+      }
       this.notifyListeners();
     });
+  }
+
+  async syncProfile() {
+    if (!this.currentUser) return;
+    const nickname = this.getNickname();
+    try {
+      await supabase.from('profiles').upsert({
+        id: this.currentUser.id,
+        username: nickname,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+    } catch (err) {
+      console.warn('[AuthManager] syncProfile ignorato (tabella non ancora creata o errore):', err);
+    }
   }
 
   async ready() {
@@ -62,9 +83,62 @@ class AuthManager {
     return this.currentUser?.email || '';
   }
 
+  /**
+   * Check if a username is available in Supabase profiles
+   */
+  async checkUsernameAvailability(rawUsername) {
+    const format = validateUsername(rawUsername);
+    if (!format.isValid) {
+      return { available: false, message: format.errorMsg };
+    }
+
+    const clean = rawUsername.trim();
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .ilike('username', clean)
+        .limit(1);
+
+      if (error) {
+        // If table doesn't exist yet, we allow signup to proceed
+        if (error.code === 'PGRST205') {
+          return { available: true, message: 'Username valido.' };
+        }
+        console.warn('[AuthManager] Errore verifica username:', error.message);
+        return { available: true, message: 'Username valido.' };
+      }
+
+      if (data && data.length > 0) {
+        return { available: false, message: 'Questo username è già occupato da un altro giocatore.' };
+      }
+
+      return { available: true, message: 'Username disponibile!' };
+    } catch (err) {
+      return { available: true, message: 'Username valido.' };
+    }
+  }
+
   async signUp({ email, password, nickname }) {
     const trimmedEmail = email.trim();
-    const cleanNick = (nickname || '').trim() || trimmedEmail.split('@')[0];
+    const cleanNick = (nickname || '').trim();
+
+    // 1. Check Username Format & Uniqueness
+    const userValidation = validateUsername(cleanNick);
+    if (!userValidation.isValid) {
+      throw new Error(userValidation.errorMsg);
+    }
+
+    const availCheck = await this.checkUsernameAvailability(cleanNick);
+    if (!availCheck.available) {
+      throw new Error(availCheck.message);
+    }
+
+    // 2. Check Password Complexity (min 8 chars, lower, upper, number, special)
+    const pwValidation = validatePassword(password);
+    if (!pwValidation.isValid) {
+      throw new Error(pwValidation.errorMsg);
+    }
 
     const redirectUrl = typeof window !== 'undefined' && window.location.origin
       ? `${window.location.origin}/`
@@ -84,6 +158,20 @@ class AuthManager {
 
     if (error) {
       throw new Error(this.translateAuthError(error.message));
+    }
+
+    // Try to ensure the profile row is present immediately
+    if (data?.user?.id) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          username: cleanNick,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      } catch (profileErr) {
+        console.warn('[AuthManager] Creazione profilo post-signup rimandata:', profileErr);
+      }
     }
 
     // If session is present immediately (e.g. email confirm off or autoconfirm)

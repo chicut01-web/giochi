@@ -3,11 +3,14 @@ import { soundFx } from '../core/SoundFx.js';
 import { pwaManager } from '../core/PwaManager.js';
 import { authManager } from '../core/AuthManager.js';
 import { authModal } from './AuthModal.js';
+import { friendsModal } from './FriendsModal.js';
+import { friendsManager } from '../core/FriendsManager.js';
 
 export class LobbyView {
   constructor(container) {
     this.container = container;
     this.pwaUnsub = null;
+    this.friendsUnsub = null;
     this.authUnsub = authManager.onAuthChange(() => {
       if (gameManager.getView() === 'lobby') {
         this.render();
@@ -44,6 +47,11 @@ export class LobbyView {
                 <span class="user-avatar-icon">👤</span>
                 <span class="user-nickname">${nickname}</span>
               </div>
+              <button class="nav-btn friends-nav-btn" id="lobby-friends-btn" title="Circolo Amici & Sfide">
+                <span class="friends-btn-icon">👥</span>
+                <span>Amici</span>
+                <span class="friends-pulse-badge hidden" id="lobby-friends-badge">0</span>
+              </button>
               <button class="nav-btn auth-nav-btn logout-btn" id="lobby-logout-btn" title="Disconnettiti">
                 <span>🚪 Esci</span>
               </button>
@@ -68,6 +76,9 @@ export class LobbyView {
             </button>
           </div>
         </header>
+
+        <!-- Live Challenges & Social Invites Banner -->
+        <div class="lobby-challenges-container" id="lobby-challenges-container"></div>
 
         <!-- Main Catalog Section -->
         <main class="lobby-content">
@@ -298,6 +309,74 @@ export class LobbyView {
       soundFx.playSnap();
       await authManager.signOut();
       this.render();
+    });
+
+    // Friends Modal Button
+    document.getElementById('lobby-friends-btn')?.addEventListener('click', () => {
+      soundFx.playSnap();
+      friendsModal.open('friends');
+    });
+
+    // Subscribe to social updates and challenges
+    if (this.friendsUnsub) this.friendsUnsub();
+    this.friendsUnsub = friendsManager.subscribe((state) => {
+      // Update badge in header
+      const badge = document.getElementById('lobby-friends-badge');
+      if (badge) {
+        if (state.pendingBadgeCount > 0) {
+          badge.textContent = state.pendingBadgeCount;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+
+      // Render incoming game challenge banner
+      const challengesBox = document.getElementById('lobby-challenges-container');
+      if (challengesBox) {
+        if (state.incomingInvites.length === 0) {
+          challengesBox.innerHTML = '';
+        } else {
+          challengesBox.innerHTML = state.incomingInvites.map(inv => `
+            <div class="lobby-challenge-card" data-invite-id="${inv.id}">
+              <div class="challenge-card-info">
+                <span class="challenge-sword-icon">⚔️</span>
+                <div class="challenge-text-box">
+                  <span class="challenge-title">Nuova Sfida Ricevuta!</span>
+                  <p class="challenge-msg"><strong>${inv.fromUsername}</strong> ti ha invitato a giocare a Scopa!</p>
+                </div>
+              </div>
+              <div class="challenge-card-actions">
+                <button class="challenge-play-btn" data-action="accept" data-invite-id="${inv.id}">
+                  <span>Accetta e Gioca</span>
+                </button>
+                <button class="challenge-refuse-btn" data-action="decline" data-invite-id="${inv.id}">
+                  <span>Rifiuta</span>
+                </button>
+              </div>
+            </div>
+          `).join('');
+
+          challengesBox.querySelectorAll('button[data-action="accept"]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const invId = btn.getAttribute('data-invite-id');
+              soundFx.playWin();
+              btn.disabled = true;
+              await friendsManager.respondToGameInvite(invId, true);
+              gameManager.setView('scopa');
+            });
+          });
+
+          challengesBox.querySelectorAll('button[data-action="decline"]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const invId = btn.getAttribute('data-invite-id');
+              soundFx.playSnap();
+              btn.disabled = true;
+              await friendsManager.respondToGameInvite(invId, false);
+            });
+          });
+        }
+      }
     });
 
     // Start Scopa Button (Enforce Login / Registration)

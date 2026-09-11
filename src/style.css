@@ -2737,4 +2737,636 @@ dialog[open]::backdrop {
   }
 }
 
+/* ==========================================================================
+   PASSWORD COMPLEXITY CHECKLIST & USERNAME FEEDBACK
+   ========================================================================== */
+
+.field-feedback {
+  font-size: 0.76rem;
+  margin-top: 5px;
+  padding: 2px 4px;
+  min-height: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.field-feedback.feedback-available {
+  color: #38ef7d;
+}
+
+.field-feedback.feedback-taken {
+  color: #ff6b7a;
+}
+
+.field-feedback.feedback-invalid {
+  color: #f7b731;
+}
+
+.field-feedback.feedback-checking {
+  color: #f5c542;
+  font-style: italic;
+}
+
+.pw-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.pw-check-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 0.2s ease;
+}
+
+.pw-check-item .pw-icon {
+  font-size: 0.72rem;
+  width: 13px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: bold;
+}
+
+.pw-check-item.valid {
+  color: #38ef7d;
+}
+
+.pw-check-item.valid .pw-icon {
+  color: #38ef7d;
+}
+
+/* ==========================================================================
+   LOBBY HEADER FRIENDS BUTTON & PULSE BADGE
+   ========================================================================== */
+
+.friends-nav-btn {
+  position: relative;
+  background: rgba(245, 197, 66, 0.12) !important;
+  border-color: rgba(245, 197, 66, 0.35) !important;
+  color: #ffe699 !important;
+}
+
+.friends-nav-btn:hover {
+  background: rgba(245, 197, 66, 0.22) !important;
+  border-color: rgba(245, 197, 66, 0.6) !important;
+  color: #fff !important;
+}
+
+.friends-pulse-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: #ff4757;
+  color: #fff;
+  border-radius: 9px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(255, 71, 87, 0.8);
+  animation: pulse-alert 1.5s infinite;
+}
+
+@keyframes pulse-alert {
+  0% { transform: scale(1); box-shadow: 0 0 4px rgba(255, 71, 87, 0.6); }
+  50% { transform: scale(1.15); box-shadow: 0 0 12px rgba(255, 71, 87, 0.9); }
+  100% { transform: scale(1); box-shadow: 0 0 4px rgba(255, 71, 87, 0.6); }
+}
+
+/* ==========================================================================
+   LIVE CHALLENGES BANNER
+   ========================================================================== */
+
+.lobby-challenges-container {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.lobby-challenge-card {
+  margin-top: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(20, 48, 30, 0.92), rgba(12, 28, 18, 0.95));
+  border: 1px solid rgba(245, 197, 66, 0.55);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 18px rgba(245, 197, 66, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  animation: slideInDown 0.35s ease;
+}
+
+@keyframes slideInDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.challenge-card-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.challenge-sword-icon {
+  font-size: 1.8rem;
+  filter: drop-shadow(0 2px 6px rgba(245, 197, 66, 0.5));
+}
+
+.challenge-text-box .challenge-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f5c542;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.challenge-text-box .challenge-msg {
+  margin: 2px 0 0;
+  font-size: 0.88rem;
+  color: #e6f4ea;
+}
+
+.challenge-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.challenge-play-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f5c542, #d49f1b);
+  color: #11261a;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(245, 197, 66, 0.4);
+  transition: all 0.2s ease;
+}
+
+.challenge-play-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 16px rgba(245, 197, 66, 0.6);
+}
+
+.challenge-refuse-btn {
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ccc;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.challenge-refuse-btn:hover {
+  background: rgba(220, 53, 69, 0.2);
+  border-color: rgba(220, 53, 69, 0.5);
+  color: #ff8a93;
+}
+
+/* ==========================================================================
+   FRIENDS MODAL (CIRCOLO AMICI & SFIDE)
+   ========================================================================== */
+
+.friends-dialog {
+  max-width: 540px;
+  width: 92%;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.friends-modal-content {
+  background: linear-gradient(170deg, #10281b 0%, #081a10 100%);
+  border: 1px solid rgba(245, 197, 66, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 24px rgba(245, 197, 66, 0.15);
+  padding: 22px 22px 18px;
+  color: #e6f4ea;
+}
+
+.friends-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.friends-modal-title-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.friends-title-icon {
+  font-size: 1.8rem;
+}
+
+.friends-modal-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.friends-modal-close-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ccc;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.friends-modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+/* Tabs */
+.friends-modal-tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.friends-tab-btn {
+  flex: 1;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.friends-tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.friends-tab-btn.active {
+  background: linear-gradient(135deg, rgba(245, 197, 66, 0.25), rgba(245, 197, 66, 0.12));
+  color: #f5c542;
+  border: 1px solid rgba(245, 197, 66, 0.35);
+}
+
+.tab-counter-badge {
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.tab-counter-badge.pulse-badge {
+  background: #ff4757;
+  color: #fff;
+}
+
+/* Modal Body */
+.friends-modal-body {
+  min-height: 240px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Friend Card */
+.friends-card-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.friend-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.friend-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(245, 197, 66, 0.25);
+}
+
+.friend-card-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(245, 197, 66, 0.2), rgba(17, 153, 142, 0.3));
+  border: 1px solid rgba(245, 197, 66, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.friend-card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.friend-username {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.friend-subtext {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.friend-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.action-btn.challenge-btn {
+  background: linear-gradient(135deg, #f5c542, #d49f1b);
+  color: #12281b;
+  box-shadow: 0 2px 8px rgba(245, 197, 66, 0.35);
+}
+
+.action-btn.challenge-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 197, 66, 0.5);
+}
+
+.action-btn.send-req-btn {
+  background: #11998e;
+  color: #fff;
+}
+
+.action-btn.send-req-btn:hover {
+  background: #14b8aa;
+}
+
+.action-btn.accept-btn {
+  background: #2ed573;
+  color: #0d2616;
+}
+
+.action-btn.accept-btn:hover {
+  background: #38ef7d;
+}
+
+.action-btn.reject-btn,
+.action-btn.cancel-req-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ccc;
+}
+
+.action-btn.reject-btn:hover,
+.action-btn.cancel-req-btn:hover {
+  background: rgba(220, 53, 69, 0.2);
+  color: #ff7675;
+  border-color: rgba(220, 53, 69, 0.4);
+}
+
+.action-btn.icon-btn {
+  padding: 6px 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.action-btn.icon-btn:hover {
+  color: #ff6b6b;
+  background: rgba(220, 53, 69, 0.15);
+}
+
+/* Status Badges */
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.status-badge.badge-friend {
+  background: rgba(46, 213, 115, 0.15);
+  color: #38ef7d;
+  border: 1px solid rgba(46, 213, 115, 0.3);
+}
+
+.status-badge.badge-pending {
+  background: rgba(245, 197, 66, 0.15);
+  color: #f5c542;
+  border: 1px solid rgba(245, 197, 66, 0.3);
+}
+
+.status-badge.badge-notice {
+  background: rgba(17, 153, 142, 0.15);
+  color: #55efc4;
+  border: 1px solid rgba(17, 153, 142, 0.3);
+}
+
+/* Search Box */
+.friends-search-box {
+  margin-bottom: 14px;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.search-input-wrapper input {
+  width: 100%;
+  padding: 10px 38px 10px 38px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.search-input-wrapper input:focus {
+  border-color: #f5c542;
+  box-shadow: 0 0 10px rgba(245, 197, 66, 0.2);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.clear-search-btn:hover {
+  color: #fff;
+}
+
+/* Empty States & Hints */
+.friends-empty-state {
+  text-align: center;
+  padding: 30px 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.friends-empty-state .empty-icon {
+  font-size: 2.8rem;
+  margin-bottom: 8px;
+}
+
+.friends-empty-state h3 {
+  color: #fff;
+  font-size: 1.05rem;
+  margin-bottom: 6px;
+}
+
+.friends-empty-state p {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  max-width: 320px;
+  margin: 0 auto 16px;
+  line-height: 1.4;
+}
+
+.friends-cta-btn {
+  padding: 9px 18px;
+  background: linear-gradient(135deg, #11998e, #38ef7d);
+  color: #0c2415;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.84rem;
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(56, 239, 125, 0.35);
+  transition: all 0.2s ease;
+}
+
+.friends-cta-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 16px rgba(56, 239, 125, 0.5);
+}
+
+.search-hint-box,
+.search-no-results,
+.search-loading-text {
+  text-align: center;
+  padding: 24px 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.search-loading-text {
+  color: #f5c542;
+  font-style: italic;
+}
+
+/* Requests Sub-sections */
+.requests-sections-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.requests-section-title {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #f5c542;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.requests-sub-empty {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+  padding: 6px 0;
+}
+
+.friends-modal-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: flex-end;
+}
+
+
 

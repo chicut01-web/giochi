@@ -3,6 +3,7 @@
 import { authManager } from '../core/AuthManager.js';
 import { gameManager } from '../core/GameManager.js';
 import { soundFx } from '../core/SoundFx.js';
+import { validatePassword, validateUsername } from '../utils/validators.js';
 
 export class AuthView {
   constructor(container) {
@@ -49,8 +50,9 @@ export class AuthView {
                 <label for="view-reg-nickname">Nome Giocatore / Nickname</label>
                 <div class="auth-field-input-box">
                   <span class="auth-field-icon">👤</span>
-                  <input type="text" id="view-reg-nickname" name="nickname" placeholder="es. Piuccia, Mario..." required autocomplete="nickname" maxlength="24" />
+                  <input type="text" id="view-reg-nickname" name="nickname" placeholder="es. Piuccia, Mario..." required autocomplete="nickname" maxlength="20" />
                 </div>
+                <div class="field-feedback" id="view-reg-nick-feedback"></div>
               </div>
 
               <div class="auth-field-group">
@@ -62,10 +64,19 @@ export class AuthView {
               </div>
 
               <div class="auth-field-group">
-                <label for="view-reg-password">Password (almeno 6 caratteri)</label>
+                <label for="view-reg-password">Password (almeno 8 caratteri)</label>
                 <div class="auth-field-input-box">
                   <span class="auth-field-icon">🔒</span>
-                  <input type="password" id="view-reg-password" name="password" placeholder="Crea una password sicura" minlength="6" required autocomplete="new-password" />
+                  <input type="password" id="view-reg-password" name="password" placeholder="Crea una password sicura" minlength="8" required autocomplete="new-password" />
+                </div>
+
+                <!-- Live Password Complexity Checklist -->
+                <div class="pw-checklist" id="view-reg-pw-checklist">
+                  <div class="pw-check-item" id="chk-len"><span class="pw-icon">✕</span> Minimo 8 caratteri</div>
+                  <div class="pw-check-item" id="chk-lower"><span class="pw-icon">✕</span> Lettera minuscola (a-z)</div>
+                  <div class="pw-check-item" id="chk-upper"><span class="pw-icon">✕</span> Lettera maiuscola (A-Z)</div>
+                  <div class="pw-check-item" id="chk-num"><span class="pw-icon">✕</span> Almeno un numero (0-9)</div>
+                  <div class="pw-check-item" id="chk-spec"><span class="pw-icon">✕</span> Simbolo speciale (!?#@...)</div>
                 </div>
               </div>
 
@@ -73,7 +84,7 @@ export class AuthView {
                 <label for="view-reg-confirm">Conferma Password</label>
                 <div class="auth-field-input-box">
                   <span class="auth-field-icon">🔐</span>
-                  <input type="password" id="view-reg-confirm" name="confirmPassword" placeholder="Ripeti la password" minlength="6" required autocomplete="new-password" />
+                  <input type="password" id="view-reg-confirm" name="confirmPassword" placeholder="Ripeti la password" minlength="8" required autocomplete="new-password" />
                 </div>
               </div>
 
@@ -149,6 +160,80 @@ export class AuthView {
       this.clearAlert();
     });
 
+    // Real-time Username Availability Checking
+    const nickInput = document.getElementById('view-reg-nickname');
+    const nickFeedback = document.getElementById('view-reg-nick-feedback');
+    let nickDebounce = null;
+
+    nickInput?.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (nickDebounce) clearTimeout(nickDebounce);
+
+      if (!val) {
+        if (nickFeedback) {
+          nickFeedback.textContent = '';
+          nickFeedback.className = 'field-feedback';
+        }
+        return;
+      }
+
+      const format = validateUsername(val);
+      if (!format.isValid) {
+        if (nickFeedback) {
+          nickFeedback.textContent = `⚠️ ${format.errorMsg}`;
+          nickFeedback.className = 'field-feedback feedback-invalid';
+        }
+        return;
+      }
+
+      if (nickFeedback) {
+        nickFeedback.textContent = '🔄 Verifica disponibilità username...';
+        nickFeedback.className = 'field-feedback feedback-checking';
+      }
+
+      nickDebounce = setTimeout(async () => {
+        const res = await authManager.checkUsernameAvailability(val);
+        if (!nickFeedback) return;
+        if (res.available) {
+          nickFeedback.textContent = '✅ Username disponibile!';
+          nickFeedback.className = 'field-feedback feedback-available';
+        } else {
+          nickFeedback.textContent = `❌ ${res.message}`;
+          nickFeedback.className = 'field-feedback feedback-taken';
+        }
+      }, 350);
+    });
+
+    // Real-time Password Checklist Updater
+    const pwInput = document.getElementById('view-reg-password');
+    const chkLen = document.getElementById('chk-len');
+    const chkLower = document.getElementById('chk-lower');
+    const chkUpper = document.getElementById('chk-upper');
+    const chkNum = document.getElementById('chk-num');
+    const chkSpec = document.getElementById('chk-spec');
+
+    const updateCheckItem = (el, isValid, text) => {
+      if (!el) return;
+      if (isValid) {
+        el.className = 'pw-check-item valid';
+        el.innerHTML = `<span class="pw-icon">✓</span> ${text}`;
+      } else {
+        el.className = 'pw-check-item';
+        el.innerHTML = `<span class="pw-icon">✕</span> ${text}`;
+      }
+    };
+
+    pwInput?.addEventListener('input', (e) => {
+      const val = e.target.value;
+      const res = validatePassword(val);
+
+      updateCheckItem(chkLen, res.minLength, 'Minimo 8 caratteri');
+      updateCheckItem(chkLower, res.hasLower, 'Lettera minuscola (a-z)');
+      updateCheckItem(chkUpper, res.hasUpper, 'Lettera maiuscola (A-Z)');
+      updateCheckItem(chkNum, res.hasNumber, 'Almeno un numero (0-9)');
+      updateCheckItem(chkSpec, res.hasSpecial, 'Simbolo speciale (!?#@...)');
+    });
+
     // Handle Registration
     regForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -193,20 +278,28 @@ export class AuthView {
   }
 
   async handleRegister() {
-    const nickname = document.getElementById('view-reg-nickname').value;
-    const email = document.getElementById('view-reg-email').value;
+    const nickname = document.getElementById('view-reg-nickname').value.trim();
+    const email = document.getElementById('view-reg-email').value.trim();
     const password = document.getElementById('view-reg-password').value;
     const confirm = document.getElementById('view-reg-confirm').value;
+
+    const userVal = validateUsername(nickname);
+    if (!userVal.isValid) {
+      soundFx.playSnap();
+      this.showAlert(userVal.errorMsg, 'error');
+      return;
+    }
+
+    const pwVal = validatePassword(password);
+    if (!pwVal.isValid) {
+      soundFx.playSnap();
+      this.showAlert(pwVal.errorMsg, 'error');
+      return;
+    }
 
     if (password !== confirm) {
       soundFx.playSnap();
       this.showAlert('Le due password inserite non coincidono.', 'error');
-      return;
-    }
-
-    if (password.length < 6) {
-      soundFx.playSnap();
-      this.showAlert('La password deve contenere almeno 6 caratteri.', 'error');
       return;
     }
 
