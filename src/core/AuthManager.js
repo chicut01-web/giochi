@@ -66,10 +66,15 @@ class AuthManager {
     const trimmedEmail = email.trim();
     const cleanNick = (nickname || '').trim() || trimmedEmail.split('@')[0];
 
+    const redirectUrl = typeof window !== 'undefined' && window.location.origin
+      ? `${window.location.origin}/`
+      : 'https://piuccia-games.vercel.app/';
+
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
       options: {
+        emailRedirectTo: redirectUrl,
         data: {
           display_name: cleanNick,
           nickname: cleanNick
