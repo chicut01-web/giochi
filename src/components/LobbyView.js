@@ -2,10 +2,12 @@
 
 import { gameManager } from '../core/GameManager.js';
 import { soundFx } from '../core/SoundFx.js';
+import { pwaManager } from '../core/PwaManager.js';
 
 export class LobbyView {
   constructor(container) {
     this.container = container;
+    this.pwaUnsub = null;
   }
 
   render() {
@@ -13,6 +15,7 @@ export class LobbyView {
     const winRate = stats.matchesPlayed > 0 
       ? Math.round((stats.matchesWon / stats.matchesPlayed) * 100) 
       : 0;
+    const isStandalone = pwaManager.checkIsStandalone();
 
     this.container.innerHTML = `
       <div class="lobby-container">
@@ -27,6 +30,11 @@ export class LobbyView {
           </div>
 
           <div class="lobby-header-actions">
+            <button class="nav-btn install-app-btn ${isStandalone ? 'hidden' : ''}" id="lobby-install-btn" title="Installa l'applicazione sulla schermata Home">
+              <span class="install-pulse-dot"></span>
+              <span class="install-btn-icon">📲</span>
+              <span class="install-btn-label">Installa App</span>
+            </button>
             <button class="nav-btn" id="lobby-stats-btn" title="Statistiche">
               <span>📊 Statistiche</span>
             </button>
@@ -219,6 +227,27 @@ export class LobbyView {
             <button class="dialog-cancel-btn" id="close-lobby-rules-btn">Chiudi</button>
           </div>
         </dialog>
+
+        <!-- PWA Install Guide Dialog -->
+        <dialog class="app-dialog pwa-install-dialog" id="lobby-install-dialog">
+          <div class="dialog-content pwa-dialog-card">
+            <div class="pwa-dialog-header">
+              <img src="/icons/icon-192.png" alt="Icona App" class="pwa-dialog-badge-icon" />
+              <div class="pwa-dialog-header-text">
+                <h2 class="dialog-title">Installa sulla Schermata Home</h2>
+                <p class="pwa-dialog-subtext">Gioca a tutto schermo senza la barra del browser, come una vera App nativa!</p>
+              </div>
+            </div>
+
+            <div class="pwa-instructions" id="pwa-instructions-content">
+              <!-- Rendered dynamically for iOS vs Android/Desktop -->
+            </div>
+
+            <div class="pwa-dialog-footer">
+              <button class="dialog-cancel-btn" id="close-install-dialog-btn">Ho Capito</button>
+            </div>
+          </div>
+        </dialog>
       </div>
     `;
 
@@ -263,6 +292,111 @@ export class LobbyView {
       const isMuted = soundFx.toggleMute();
       const soundIcon = document.getElementById('lobby-sound-icon');
       if (soundIcon) soundIcon.textContent = isMuted ? '🔇' : '🔊';
+    });
+
+    // PWA Install Action & Dialog
+    const installBtn = document.getElementById('lobby-install-btn');
+    const installDialog = document.getElementById('lobby-install-dialog');
+    const closeInstallDialogBtn = document.getElementById('close-install-dialog-btn');
+    const instructionsContent = document.getElementById('pwa-instructions-content');
+
+    const updateInstallButtonVisibility = () => {
+      const isStandalone = pwaManager.checkIsStandalone();
+      if (installBtn) {
+        if (isStandalone) {
+          installBtn.classList.add('hidden');
+        } else {
+          installBtn.classList.remove('hidden');
+        }
+      }
+    };
+
+    installBtn?.addEventListener('click', async () => {
+      soundFx.playSnap();
+      const result = await pwaManager.promptInstall();
+      
+      if (result.method === 'native' && result.success) {
+        updateInstallButtonVisibility();
+        return;
+      }
+
+      // If iOS or manual browser guide needed, show dialog
+      if (instructionsContent) {
+        if (pwaManager.isIOS()) {
+          instructionsContent.innerHTML = `
+            <div class="pwa-steps-list">
+              <div class="pwa-step-item">
+                <div class="pwa-step-badge">1</div>
+                <div class="pwa-step-desc">
+                  Tocca il tasto <strong>Condividi</strong> 
+                  <span class="ios-inline-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                      <polyline points="16 6 12 2 8 6"/>
+                      <line x1="12" y1="2" x2="12" y2="15"/>
+                    </svg>
+                  </span>
+                  nella barra in basso (o in alto su iPad) di Safari.
+                </div>
+              </div>
+              <div class="pwa-step-item">
+                <div class="pwa-step-badge">2</div>
+                <div class="pwa-step-desc">
+                  Scorri il menu e tocca <strong>"Aggiungi alla schermata Home"</strong> 
+                  <span class="ios-inline-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="4"/>
+                      <line x1="12" y1="8" x2="12" y2="16"/>
+                      <line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                  </span>.
+                </div>
+              </div>
+              <div class="pwa-step-item">
+                <div class="pwa-step-badge">3</div>
+                <div class="pwa-step-desc">
+                  Tocca <strong>"Aggiungi"</strong> in alto a destra. L'icona dell'app apparirà sulla tua Home e si aprirà a schermo intero senza barre!
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          instructionsContent.innerHTML = `
+            <div class="pwa-steps-list">
+              <div class="pwa-step-item">
+                <div class="pwa-step-badge">1</div>
+                <div class="pwa-step-desc">
+                  Apri il menu delle opzioni del browser (i <strong>3 puntini ⋮</strong> in alto o in basso).
+                </div>
+              </div>
+              <div class="pwa-step-item">
+                <div class="pwa-step-badge">2</div>
+                <div class="pwa-step-desc">
+                  Seleziona <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong>.
+                </div>
+              </div>
+              <div class="pwa-step-item">
+                <div class="pwa-step-badge">3</div>
+                <div class="pwa-step-desc">
+                  Conferma per installarla sul dispositivo: si aprirà subito come una vera app!
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      installDialog?.showModal();
+    });
+
+    closeInstallDialogBtn?.addEventListener('click', () => {
+      installDialog?.close();
+    });
+
+    // Subscribe to PWA changes
+    if (this.pwaUnsub) this.pwaUnsub();
+    this.pwaUnsub = pwaManager.subscribe(() => {
+      updateInstallButtonVisibility();
     });
   }
 }

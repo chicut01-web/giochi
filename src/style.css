@@ -131,25 +131,75 @@ html, body {
   font-size: 1.1rem;
 }
 
+.nav-btn.install-app-btn {
+  background: linear-gradient(135deg, rgba(245, 197, 66, 0.2) 0%, rgba(184, 134, 11, 0.35) 100%);
+  border: 1px solid var(--gold-primary);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(245, 197, 66, 0.25);
+  font-weight: 700;
+  gap: 8px;
+}
+
+.nav-btn.install-app-btn:hover {
+  background: linear-gradient(135deg, rgba(245, 197, 66, 0.35) 0%, rgba(184, 134, 11, 0.55) 100%);
+  border-color: #ffe580;
+  color: #ffffff;
+  box-shadow: 0 4px 18px rgba(245, 197, 66, 0.45);
+  transform: translateY(-2px);
+}
+
+.install-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #00b894;
+  box-shadow: 0 0 8px #00b894;
+  animation: pwaPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes pwaPulse {
+  0% {
+    transform: scale(0.85);
+    box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.8);
+  }
+  70% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 7px rgba(0, 184, 148, 0);
+  }
+  100% {
+    transform: scale(0.85);
+    box-shadow: 0 0 0 0 rgba(0, 184, 148, 0);
+  }
+}
+
+.hidden {
+  display: none !important;
+}
+
 /* =========================================================================
    LOBBY / PORTAL VIEW
    ========================================================================= */
 
 .lobby-container {
   min-height: 100vh;
+  min-height: 100dvh;
   background: 
     radial-gradient(ellipse at 50% 10%, #173827 0%, #081a11 60%, #030a06 100%);
   display: flex;
   flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .lobby-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 36px;
-  background: rgba(10, 20, 14, 0.6);
-  backdrop-filter: blur(12px);
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) max(24px, env(safe-area-inset-right, 24px)) 18px max(24px, env(safe-area-inset-left, 24px));
+  background: rgba(10, 20, 14, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(245, 197, 66, 0.2);
   flex-wrap: wrap;
   gap: 16px;
@@ -1206,6 +1256,106 @@ dialog[open]::backdrop {
   color: #ffffff;
 }
 
+/* PWA Install Modal Styles */
+.pwa-dialog-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pwa-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-align: left;
+  border-bottom: 1px solid rgba(245, 197, 66, 0.2);
+  padding-bottom: 16px;
+}
+
+.pwa-dialog-badge-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  border: 2px solid var(--gold-primary);
+  box-shadow: 0 4px 15px rgba(245, 197, 66, 0.35);
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.pwa-dialog-header-text .dialog-title {
+  text-align: left;
+  margin-bottom: 4px;
+  font-size: 1.35rem;
+}
+
+.pwa-dialog-subtext {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.pwa-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pwa-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(245, 197, 66, 0.15);
+  padding: 12px 14px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.pwa-step-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-primary) 0%, var(--gold-deep) 100%);
+  color: #1a1002;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.pwa-step-desc {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  flex: 1;
+}
+
+.ios-inline-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  background: rgba(245, 197, 66, 0.15);
+  border: 1px solid rgba(245, 197, 66, 0.3);
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--gold-primary);
+  margin: 0 3px;
+}
+
+.ios-inline-icon svg {
+  vertical-align: middle;
+}
+
+.pwa-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 /* Capture Choice Dialog Grid */
 .capture-options-grid {
   display: flex;
@@ -1415,9 +1565,19 @@ dialog[open]::backdrop {
 
   .lobby-header-actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     width: 100%;
     gap: 8px;
+  }
+
+  .lobby-header-actions .install-app-btn {
+    order: -1;
+    width: 100%;
+    flex: 1 1 100%;
+    padding: 9px 12px;
+    font-size: 0.86rem;
+    justify-content: center;
   }
 
   .lobby-header-actions .nav-btn {

@@ -3,6 +3,7 @@
 import './style.css';
 import { gameManager } from './core/GameManager.js';
 import { soundFx } from './core/SoundFx.js';
+import { pwaManager } from './core/PwaManager.js';
 import { LobbyView } from './components/LobbyView.js';
 import { ScopaView } from './games/scopa/ScopaView.js';
 
