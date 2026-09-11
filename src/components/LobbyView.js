@@ -30,7 +30,7 @@ export class LobbyView {
         <header class="lobby-header">
           <div class="brand-badge">
             <div class="brand-avatar-wrapper">
-              <img src="/icons/icon-192.png" alt="Piuccia Games" class="brand-avatar-img" />
+              <img src="/icons/icon-192.png?v=2" alt="Piuccia Games" class="brand-avatar-img" />
             </div>
             <div class="brand-text">
               <h1 class="brand-title">Piuccia Games</h1>
@@ -254,7 +254,7 @@ export class LobbyView {
         <dialog class="app-dialog pwa-install-dialog" id="lobby-install-dialog">
           <div class="dialog-content pwa-dialog-card">
             <div class="pwa-dialog-header">
-              <img src="/icons/icon-192.png" alt="Icona App" class="pwa-dialog-badge-icon" />
+              <img src="/icons/icon-192.png?v=2" alt="Icona App" class="pwa-dialog-badge-icon" />
               <div class="pwa-dialog-header-text">
                 <h2 class="dialog-title">Installa sulla Schermata Home</h2>
                 <p class="pwa-dialog-subtext">Gioca a tutto schermo senza la barra del browser, come una vera App nativa!</p>

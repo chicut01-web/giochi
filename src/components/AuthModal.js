@@ -27,7 +27,7 @@ export class AuthModal {
         
         <div class="auth-header">
           <div class="auth-logo-badge">
-            <img src="/icons/icon-192.png" alt="Piuccia Games Logo" class="auth-logo-img" />
+            <img src="/icons/icon-192.png?v=2" alt="Piuccia Games Logo" class="auth-logo-img" />
           </div>
           <h2 class="dialog-title auth-title">Piuccia Games</h2>
           <p class="auth-subtitle" id="auth-dialog-subtitle">Accedi o registrati per scendere al tavolo da gioco!</p>
