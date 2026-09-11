@@ -1,10 +1,10 @@
-// Scopa View: Game Board Rendering, Step-by-Step Animations, 10s Turn Timer, and Interactions
-
 import { ScopaEngine } from './ScopaEngine.js';
 import { ScopaAI } from './ScopaAI.js';
 import { renderCardSvg, renderCardBackSvg } from './ScopaCards.js';
 import { soundFx } from '../../core/SoundFx.js';
 import { gameManager } from '../../core/GameManager.js';
+import { authManager } from '../../core/AuthManager.js';
+import { authModal } from '../../components/AuthModal.js';
 
 export class ScopaView {
   constructor(container) {
@@ -17,6 +17,18 @@ export class ScopaView {
   }
 
   init(options = {}) {
+    if (!authManager.isAuthenticated()) {
+      gameManager.setView('lobby');
+      authModal.open({
+        mode: 'register',
+        notice: 'Per giocare a Scopa, registrati o accedi con il tuo account!',
+        onAuthenticated: () => {
+          gameManager.setView('scopa', options);
+        }
+      });
+      return;
+    }
+
     const target = options.targetScore || gameManager.settings.targetPoints || 11;
     this.stopTurnTimer();
     this.engine = new ScopaEngine({ targetScore: target });
@@ -142,7 +154,7 @@ export class ScopaView {
             <div class="avatar-badge">
               <div class="avatar-icon user-avatar">👤</div>
               <div class="avatar-info">
-                <span class="avatar-name">Giocatore</span>
+                <span class="avatar-name">${authManager.getNickname() || 'Giocatore'}</span>
                 <span class="avatar-sub" id="player-scope-count">Scope: 0</span>
               </div>
             </div>

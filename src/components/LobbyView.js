@@ -1,13 +1,18 @@
-// Lobby & Multi-Game Portal View
-
 import { gameManager } from '../core/GameManager.js';
 import { soundFx } from '../core/SoundFx.js';
 import { pwaManager } from '../core/PwaManager.js';
+import { authManager } from '../core/AuthManager.js';
+import { authModal } from './AuthModal.js';
 
 export class LobbyView {
   constructor(container) {
     this.container = container;
     this.pwaUnsub = null;
+    this.authUnsub = authManager.onAuthChange(() => {
+      if (gameManager.getView() === 'lobby') {
+        this.render();
+      }
+    });
   }
 
   render() {
@@ -16,6 +21,8 @@ export class LobbyView {
       ? Math.round((stats.matchesWon / stats.matchesPlayed) * 100) 
       : 0;
     const isStandalone = pwaManager.checkIsStandalone();
+    const isAuthenticated = authManager.isAuthenticated();
+    const nickname = authManager.getNickname() || 'Giocatore';
 
     this.container.innerHTML = `
       <div class="lobby-container">
@@ -32,6 +39,19 @@ export class LobbyView {
           </div>
 
           <div class="lobby-header-actions">
+            ${isAuthenticated ? `
+              <div class="user-profile-badge" id="lobby-user-badge" title="Giocatore Connesso: ${authManager.getUserEmail()}">
+                <span class="user-avatar-icon">👤</span>
+                <span class="user-nickname">${nickname}</span>
+              </div>
+              <button class="nav-btn auth-nav-btn logout-btn" id="lobby-logout-btn" title="Disconnettiti">
+                <span>🚪 Esci</span>
+              </button>
+            ` : `
+              <button class="nav-btn auth-nav-btn login-btn" id="lobby-login-btn" title="Accedi o registrati">
+                <span>🔑 Accedi</span>
+              </button>
+            `}
             <button class="nav-btn install-app-btn ${isStandalone ? 'hidden' : ''}" id="lobby-install-btn" title="Installa l'applicazione sulla schermata Home">
               <span class="install-pulse-dot"></span>
               <span class="install-btn-icon">📲</span>
@@ -268,9 +288,31 @@ export class LobbyView {
       });
     });
 
-    // Start Scopa Button
+    // Auth Buttons
+    document.getElementById('lobby-login-btn')?.addEventListener('click', () => {
+      soundFx.playSnap();
+      authModal.open({ mode: 'login' });
+    });
+
+    document.getElementById('lobby-logout-btn')?.addEventListener('click', async () => {
+      soundFx.playSnap();
+      await authManager.signOut();
+      this.render();
+    });
+
+    // Start Scopa Button (Enforce Login / Registration)
     document.getElementById('start-scopa-btn')?.addEventListener('click', () => {
       soundFx.playSnap();
+      if (!authManager.isAuthenticated()) {
+        authModal.open({
+          mode: 'register',
+          notice: 'Per iniziare a giocare a Scopa, registrati o accedi al tuo account!',
+          onAuthenticated: () => {
+            gameManager.setView('scopa');
+          }
+        });
+        return;
+      }
       gameManager.setView('scopa');
     });
 
