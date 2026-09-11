@@ -607,10 +607,10 @@ export class ScopaView {
 
     this.setNarrator(isPlayer ? '👤' : '🤖', `${actorName} gioca ${card.name}...`);
 
-    // 2. Animate the played card moving smoothly from hand to table
+    // 2. Animate the played card moving smoothly onto the open green felt of the table
     const playedFlyEl = await this.animateCardPlay(role, card);
 
-    // 3. If capture, highlight targets and fly all captured cards into the capture pile
+    // 3. Comfortable pause on the green space so the card is clearly visible ("così si vede bene")
     if (isCapture) {
       // Highlight captured cards on table with golden glow
       capturedCards.forEach(c => {
@@ -632,18 +632,20 @@ export class ScopaView {
         soundFx.playCoin();
       }
 
-      // Brief pause to clearly see the captured cards
-      await new Promise(r => setTimeout(r, 600));
+      // Generous pause to clearly see the played card and the highlighted captures (680ms)
+      await new Promise(r => setTimeout(r, 680));
 
-      // Smooth flight of both played card and target cards into the capture pile
+      // Smooth flight of both played card and target cards into the capture pile (600ms)
       await this.animateCaptureToPile(role, playedFlyEl, capturedCards);
     } else {
-      // No capture: Discard step, settles naturally on table
-      this.setNarrator('🌱', `${actorName} scarta ${card.name}: resta sul tavolo`);
-      await new Promise(r => setTimeout(r, 450));
-      if (playedFlyEl && playedFlyEl.parentNode) {
-        playedFlyEl.remove();
-      }
+      // No capture: The card rests clearly visible on the green felt, then smoothly slides into place with the table cards
+      this.setNarrator('🌱', `${actorName} cala ${card.name}: resta sul tavolo`);
+      
+      // Pause on green space so it's clearly seen (650ms)
+      await new Promise(r => setTimeout(r, 650));
+      
+      // Smoothly slide the card from the green space into its target slot inside table-cards-field!
+      await this.animateCardJoinTable(playedFlyEl, card);
     }
 
     // 4. Actually execute card move in game engine
@@ -687,13 +689,16 @@ export class ScopaView {
     }
   }
 
-  /* Physics-based Smooth Card Throw Animation */
+  /* Physics-based Smooth Card Throw Animation onto Open Green Felt */
   async animateCardPlay(role, card) {
     const isPlayer = role === 'player';
+    const centerZone = document.querySelector('.table-center-zone');
+    const centerRect = centerZone 
+      ? centerZone.getBoundingClientRect() 
+      : { left: window.innerWidth / 2 - 150, top: window.innerHeight / 2 - 80, width: 300, height: 160 };
+
     const tableField = document.getElementById('table-cards-field');
-    const tableRect = tableField 
-      ? tableField.getBoundingClientRect() 
-      : { left: window.innerWidth / 2 - 35, top: window.innerHeight / 2 - 55, width: 70, height: 110 };
+    const tableCards = Array.from(tableField ? tableField.querySelectorAll('.table-card') : []);
 
     let startRect = null;
     let sourceEl = null;
@@ -712,69 +717,174 @@ export class ScopaView {
       }
     }
 
+    const cardWidth = startRect?.width || 56;
+    const cardHeight = startRect?.height || 92;
+
     if (!startRect || startRect.width === 0) {
       startRect = {
-        left: window.innerWidth / 2 - 30,
+        left: window.innerWidth / 2 - cardWidth / 2,
         top: isPlayer ? window.innerHeight - 120 : 60,
-        width: 58,
-        height: 96
+        width: cardWidth,
+        height: cardHeight
       };
     }
 
-    // Target position in table area with subtle organic variation
-    const targetX = tableRect.left + tableRect.width / 2 - startRect.width / 2 + (Math.random() - 0.5) * 24;
-    const targetY = tableRect.top + tableRect.height / 2 - startRect.height / 2 + (Math.random() - 0.5) * 14;
+    // Calculate position on the open green felt that NEVER overlaps existing table cards
+    let targetX = centerRect.left + centerRect.width / 2 - cardWidth / 2;
+    let targetY = centerRect.top + centerRect.height / 2 - cardHeight / 2;
+
+    if (tableCards.length > 0) {
+      const existingRects = tableCards.map(el => el.getBoundingClientRect());
+      const minCardTop = Math.min(...existingRects.map(r => r.top));
+      const maxCardBottom = Math.max(...existingRects.map(r => r.bottom));
+      const maxCardRight = Math.max(...existingRects.map(r => r.right));
+      const minCardLeft = Math.min(...existingRects.map(r => r.left));
+
+      const spaceBelow = centerRect.bottom - maxCardBottom;
+      const spaceAbove = minCardTop - centerRect.top;
+
+      if (isPlayer) {
+        // Player: Land in front of the player on the green felt below the cards
+        if (spaceBelow >= cardHeight * 0.7) {
+          targetY = maxCardBottom + 10;
+        } else if (maxCardRight + cardWidth + 14 < centerRect.right - 10) {
+          // Open green felt to the right of cards
+          targetX = maxCardRight + 14;
+          targetY = minCardTop;
+        } else {
+          // Open green felt with clear depth separation
+          targetY = maxCardBottom - cardHeight * 0.35;
+          targetX = centerRect.left + centerRect.width / 2 - cardWidth / 2 + 25;
+        }
+      } else {
+        // CPU: Land on CPU's green felt above the cards
+        if (spaceAbove >= cardHeight * 0.7) {
+          targetY = minCardTop - cardHeight - 10;
+        } else if (minCardLeft - cardWidth - 14 > centerRect.left + 50) {
+          // Open green felt to the left of cards
+          targetX = minCardLeft - cardWidth - 14;
+          targetY = minCardTop;
+        } else {
+          targetY = minCardTop - cardHeight * 0.45;
+          targetX = centerRect.left + centerRect.width / 2 - cardWidth / 2 - 25;
+        }
+      }
+    }
+
+    // Keep cleanly within table bounds
+    targetX = Math.max(centerRect.left + 10, Math.min(targetX, centerRect.right - cardWidth - 10));
+    targetY = Math.max(centerRect.top + 6, Math.min(targetY, centerRect.bottom - cardHeight - 6));
+
     const dx = targetX - startRect.left;
     const dy = targetY - startRect.top;
-    const landingRot = ((card.value * 5) % 7) - 3;
+    const landingRot = ((card.value * 4) % 5) - 2;
 
     // Create flying card element
     const flyEl = document.createElement('div');
-    flyEl.className = 'card-wrapper flying-card-live';
+    flyEl.className = 'card-wrapper flying-card-live played-on-green-felt';
     flyEl.innerHTML = renderCardSvg(card, true);
     flyEl.style.left = `${startRect.left}px`;
     flyEl.style.top = `${startRect.top}px`;
-    flyEl.style.width = `${startRect.width}px`;
-    flyEl.style.height = `${startRect.height}px`;
+    flyEl.style.width = `${cardWidth}px`;
+    flyEl.style.height = `${cardHeight}px`;
     document.body.appendChild(flyEl);
 
     soundFx.playSnap();
 
     if (isPlayer) {
-      // Player: arcs upward smoothly onto the table
+      // Player: arcs upward smoothly onto the open green space (520ms)
       const anim = flyEl.animate([
         { transform: 'translate(0, 0) scale(1) rotate(0deg)' },
-        { transform: `translate(${dx * 0.5}px, ${dy * 0.4 - 24}px) scale(1.06) rotate(${(Math.random() - 0.5) * 6}deg)`, offset: 0.5 },
+        { 
+          transform: `translate(${dx * 0.45}px, ${dy * 0.35 - 30}px) scale(1.08) rotate(${(Math.random() - 0.5) * 4}deg)`,
+          offset: 0.45 
+        },
         { transform: `translate(${dx}px, ${dy}px) scale(1) rotate(${landingRot}deg)` }
       ], {
-        duration: 300,
-        easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)',
+        duration: 520,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards'
       });
       try {
         await anim.finished;
       } catch (e) {
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 520));
       }
     } else {
-      // CPU: flips smoothly down from top
+      // CPU: flips smoothly down from top onto the green felt (540ms)
       const anim = flyEl.animate([
-        { transform: 'translate(0, 0) scale(0.85) rotateY(180deg)', opacity: 0.8 },
-        { transform: `translate(${dx * 0.5}px, ${dy * 0.5 + 18}px) scale(1.06) rotateY(90deg)`, opacity: 1, offset: 0.5 },
+        { transform: 'translate(0, 0) scale(0.88) rotateY(180deg)', opacity: 0.8 },
+        { 
+          transform: `translate(${dx * 0.45}px, ${dy * 0.45 + 24}px) scale(1.08) rotateY(90deg)`, 
+          opacity: 1, 
+          offset: 0.45 
+        },
         { transform: `translate(${dx}px, ${dy}px) scale(1) rotateY(0deg) rotate(${landingRot}deg)`, opacity: 1 }
       ], {
-        duration: 350,
-        easing: 'cubic-bezier(0.2, 0.8, 0.25, 1)',
+        duration: 540,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards'
       });
       try {
         await anim.finished;
       } catch (e) {
-        await new Promise(r => setTimeout(r, 350));
+        await new Promise(r => setTimeout(r, 540));
       }
     }
 
     return flyEl;
+  }
+
+  /* Smoothly slide the played card from the green space into the table cards line */
+  async animateCardJoinTable(playedFlyEl, card) {
+    if (!playedFlyEl || !playedFlyEl.parentNode) return;
+
+    const tableField = document.getElementById('table-cards-field');
+    if (!tableField) {
+      playedFlyEl.remove();
+      return;
+    }
+
+    // Measure exact destination slot where this card will sit in table-cards-field
+    const dummy = document.createElement('div');
+    dummy.className = 'card-wrapper table-card';
+    dummy.style.visibility = 'hidden';
+    dummy.style.pointerEvents = 'none';
+    dummy.innerHTML = renderCardSvg(card, true);
+    tableField.appendChild(dummy);
+
+    const destRect = dummy.getBoundingClientRect();
+    dummy.remove();
+
+    const currentRect = playedFlyEl.getBoundingClientRect();
+    const slideDx = destRect.left - currentRect.left;
+    const slideDy = destRect.top - currentRect.top;
+    const finalRot = ((card.value * 5) % 7) - 3;
+
+    // Smooth gentle slide into the table cards row
+    soundFx.playDeal();
+    const slideAnim = playedFlyEl.animate([
+      { transform: playedFlyEl.style.transform || 'none' },
+      { 
+        transform: `translate(${slideDx * 0.5}px, ${slideDy * 0.5 - 6}px) scale(1.02)`,
+        offset: 0.5 
+      },
+      { transform: `translate(${slideDx}px, ${slideDy}px) scale(1) rotate(${finalRot}deg)` }
+    ], {
+      duration: 480,
+      easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+      fill: 'forwards'
+    });
+
+    try {
+      await slideAnim.finished;
+    } catch (e) {
+      await new Promise(r => setTimeout(r, 480));
+    }
+
+    if (playedFlyEl && playedFlyEl.parentNode) {
+      playedFlyEl.remove();
+    }
   }
 
   /* Smooth Dynamic Vector Flight into the Player or CPU Capture Pile */
@@ -788,7 +898,7 @@ export class ScopaView {
 
     const elementsToFly = [];
 
-    // Include the played card that just landed
+    // Include the played card that is resting on the green space
     if (playedFlyEl && playedFlyEl.parentNode) {
       elementsToFly.push(playedFlyEl);
     }
@@ -820,15 +930,19 @@ export class ScopaView {
       const currentY = r.top;
       const dx = targetCenterX - (currentX + r.width / 2);
       const dy = targetCenterY - (currentY + r.height / 2);
-      const rot = (index - 1) * 8 + (Math.random() - 0.5) * 12;
+      const rot = (index - 1) * 8 + (Math.random() - 0.5) * 10;
 
       const anim = el.animate([
         { transform: el.style.transform || 'translate(0, 0) scale(1)', opacity: 1 },
-        { transform: `translate(${dx * 0.6}px, ${dy * 0.5}px) scale(0.65) rotate(${rot * 0.5}deg)`, opacity: 0.9, offset: 0.6 },
-        { transform: `translate(${dx}px, ${dy}px) scale(0.32) rotate(${rot}deg)`, opacity: 0.15 }
+        { 
+          transform: `translate(${dx * 0.55}px, ${dy * 0.45 - 20}px) scale(0.72) rotate(${rot * 0.6}deg)`, 
+          opacity: 0.95, 
+          offset: 0.55 
+        },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.3) rotate(${rot}deg)`, opacity: 0.2 }
       ], {
-        duration: 380,
-        easing: 'cubic-bezier(0.25, 0.9, 0.3, 1)',
+        duration: 620,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards'
       });
 
@@ -847,7 +961,7 @@ export class ScopaView {
     // Trigger golden pile bounce animation
     if (pileEl) {
       pileEl.classList.add('pile-bump');
-      setTimeout(() => pileEl.classList.remove('pile-bump'), 360);
+      setTimeout(() => pileEl.classList.remove('pile-bump'), 400);
     }
   }
 
