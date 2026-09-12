@@ -364,6 +364,11 @@ export class ScopaView {
   attachEventListeners() {
     // Back to Lobby
     document.getElementById('scopa-back-btn')?.addEventListener('click', () => {
+      if (this.view?.mode === 'online' && this.view?.status === 'active' && !this.view?.isMatchOver) {
+        if (!confirm('Tornare alla Lobby? La partita rimarrà attiva e potrai riprenderla dalla Lobby, oppure puoi abbandonarla con "Abbandona".')) {
+          return;
+        }
+      }
       this.cleanup();
       gameManager.setView('lobby');
     });
@@ -680,7 +685,11 @@ export class ScopaView {
      ========================================================================= */
 
   async onPlayerCardClick(cardId) {
-    if (this.isProcessing || !this.view || !this.view.isYourTurn || this.view.isRoundOver) {
+    if (this.isProcessing) return;
+    if (!this.view || this.view.isRoundOver) return;
+
+    if (!this.view.isYourTurn) {
+      this.setNarrator('⏳', 'Non è il tuo turno! Attendi l\'avversario.');
       return;
     }
 
@@ -705,8 +714,22 @@ export class ScopaView {
     this.isProcessing = true;
     const res = await this.match.playCard(card.id, chosenCombo);
     if (!res.ok) {
-      this.setNarrator('⚠️', 'Mossa non valida, riprova.');
       this.isProcessing = false;
+      this.handleMoveError(res.error);
+    }
+  }
+
+  handleMoveError(error) {
+    if (error === 'not_your_turn') {
+      this.setNarrator('⏳', 'Non è il tuo turno! Attendi l\'avversario.');
+    } else if (error === 'version_conflict') {
+      this.setNarrator('🔄', 'Partita risincronizzata dal server, riprova la mossa.');
+    } else if (error === 'card_not_in_hand') {
+      this.setNarrator('⚠️', 'Questa carta non è più disponibile nella tua mano.');
+    } else if (error === 'match_not_active') {
+      this.setNarrator('🏁', 'La partita non è più attiva.');
+    } else {
+      this.setNarrator('⚠️', 'Mossa non valida, riprova.');
     }
   }
 
@@ -738,8 +761,8 @@ export class ScopaView {
         this.resumeTimer();
         const res = await this.match.playCard(playedCard.id, options[idx]);
         if (!res.ok) {
-          this.setNarrator('⚠️', 'Mossa non valida, riprova.');
           this.isProcessing = false;
+          this.handleMoveError(res.error);
         }
       });
     });

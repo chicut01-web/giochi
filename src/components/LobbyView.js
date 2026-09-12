@@ -81,6 +81,7 @@ export class LobbyView {
 
         <!-- Live Challenges & Social Invites Banner -->
         <div class="lobby-challenges-container" id="lobby-challenges-container"></div>
+        <div class="lobby-challenges-container" id="lobby-active-session-container"></div>
 
         <!-- Main Catalog Section -->
         <main class="lobby-content">
@@ -336,15 +337,8 @@ export class LobbyView {
       // Render incoming game challenge banner
       const challengesBox = document.getElementById('lobby-challenges-container');
       if (challengesBox) {
-        // Chi ha lanciato la sfida entra appena l'altro accetta, oppure ripresa partita attiva
-        if (!this.joinedSessionId) {
-          friendsManager.findActiveSession().then(sessionId => {
-            if (sessionId && gameManager.getView() === 'lobby') {
-              this.joinedSessionId = sessionId;
-              friendsManager.handleSessionAutoJoin(sessionId);
-            }
-          });
-        }
+        // Verifica se c'è una partita online in sospeso da mostrare come opzione (non forzata)
+        this.updateActiveSessionBanner();
 
         if (state.incomingInvites.length === 0) {
           challengesBox.innerHTML = '';
@@ -542,5 +536,58 @@ export class LobbyView {
     this.pwaUnsub = pwaManager.subscribe(() => {
       updateInstallButtonVisibility();
     });
+  }
+
+  async updateActiveSessionBanner() {
+    const activeBox = document.getElementById('lobby-active-session-container');
+    if (!activeBox) return;
+
+    if (!authManager.isAuthenticated()) {
+      activeBox.innerHTML = '';
+      return;
+    }
+
+    try {
+      const sessionId = await friendsManager.findActiveSession();
+      if (!sessionId || gameManager.getView() !== 'lobby') {
+        activeBox.innerHTML = '';
+        return;
+      }
+
+      activeBox.innerHTML = `
+        <div class="lobby-challenge-card active-session-card">
+          <div class="challenge-card-info">
+            <span class="challenge-sword-icon">🎮</span>
+            <div class="challenge-text-box">
+              <span class="challenge-title">Partita Online in Sospeso</span>
+              <p class="challenge-msg">Hai una partita a Scopa attiva non conclusa. Vuoi riprenderla o chiuderla?</p>
+            </div>
+          </div>
+          <div class="challenge-card-actions">
+            <button class="challenge-play-btn" id="btn-resume-active-session">
+              <span>Riprendi Partita</span>
+            </button>
+            <button class="challenge-refuse-btn" id="btn-abandon-active-session">
+              <span>Abbandona / Chiudi</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('btn-resume-active-session')?.addEventListener('click', () => {
+        soundFx.playSnap();
+        gameManager.setView('scopa', { sessionId });
+      });
+
+      document.getElementById('btn-abandon-active-session')?.addEventListener('click', async () => {
+        if (!confirm('Vuoi davvero abbandonare questa partita? Verrà considerata persa a tavolino.')) return;
+        soundFx.playSnap();
+        activeBox.innerHTML = '';
+        await friendsManager.abandonSession(sessionId);
+      });
+    } catch (err) {
+      console.warn('[LobbyView] Errore verifica sessione attiva:', err);
+      activeBox.innerHTML = '';
+    }
   }
 }

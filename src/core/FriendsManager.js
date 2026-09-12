@@ -81,8 +81,13 @@ class FriendsManager {
           const session = payload.new;
           if (session && session.status === 'active') {
             if (session.player_a === user.id || session.player_b === user.id) {
-              console.log('[FriendsManager] Nuova partita online rilevata via Realtime:', session.id);
-              this.handleSessionAutoJoin(session.id);
+              const sessionCreated = session.created_at ? new Date(session.created_at).getTime() : 0;
+              const isRecent = (Date.now() - sessionCreated) < 15000;
+              // Catapulta al tavolo SOLO se questo utente era in attesa attiva di accettazione sfida
+              if (isRecent && (this.activeWaitingChallenge || this.isAcceptingInvite)) {
+                console.log('[FriendsManager] Nuova partita online rilevata via Realtime:', session.id);
+                this.handleSessionAutoJoin(session.id);
+              }
             }
           }
         }
@@ -699,49 +704,91 @@ class FriendsManager {
    * Accetta una sfida: la Edge Function crea la partita e restituisce il suo id
    */
   async acceptGameInvite(inviteId) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    if (!token) throw new Error('Devi aver effettuato l\'accesso.');
+    this.isAcceptingInvite = true;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Devi aver effettuato l\'accesso.');
 
-    const { data, error } = await supabase.functions.invoke('scopa', {
-      body: { action: 'create', inviteId },
-      headers: { Authorization: `Bearer ${token}` }
-    });
+      const { data, error } = await supabase.functions.invoke('scopa', {
+        body: { action: 'create', inviteId },
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    if (error || !data?.sessionId) {
-      console.error('[FriendsManager] Creazione partita fallita:', error);
-      throw new Error(data?.error || 'Impossibile avviare la partita. Riprova.');
+      if (error) {
+        let errBody = null;
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            errBody = await error.context.json();
+          }
+        } catch (e) {}
+        console.error('[FriendsManager] Creazione partita fallita:', error, errBody);
+        throw new Error(errBody?.error || data?.error || 'Impossibile avviare la partita. Riprova.');
+      }
+
+      if (!data?.sessionId) {
+        throw new Error('ID sessione mancante.');
+      }
+
+      await this.refreshAll();
+      return data.sessionId;
+    } finally {
+      setTimeout(() => {
+        this.isAcceptingInvite = false;
+      }, 3000);
     }
-
-    await this.refreshAll();
-    return data.sessionId;
   }
 
   /**
-   * Partita già in corso da riprendere (riapertura dell'app, sfida accettata
-   * dall'altro mentre eri nella lobby)
+   * Partita già in corso da riprendere
    */
   async findActiveSession() {
     const user = authManager.getUser();
     if (!user) return null;
 
-    const { data, error } = await supabase
-      .from('game_sessions')
-      .select('id, created_at, updated_at')
-      .eq('status', 'active')
-      .or(`player_a.eq.${user.id},player_b.eq.${user.id}`)
-      .order('updated_at', { ascending: false })
-      .limit(1);
+    try {
+      const { data, error } = await supabase
+        .from('game_sessions')
+        .select('id, created_at, updated_at')
+        .eq('status', 'active')
+        .or(`player_a.eq.${user.id},player_b.eq.${user.id}`)
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-    if (error || !data || data.length === 0) return null;
+      if (error || !data || data.length === 0) return null;
 
-    const session = data[0];
-    const sessionTime = new Date(session.updated_at || session.created_at).getTime();
-    if (Date.now() - sessionTime > 2 * 60 * 60 * 1000) {
+      const session = data[0];
+      const sessionTime = new Date(session.updated_at || session.created_at).getTime();
+      // Ignora sessioni inattive da più di 15 minuti
+      if (Date.now() - sessionTime > 15 * 60 * 1000) {
+        return null;
+      }
+
+      return session.id;
+    } catch (err) {
       return null;
     }
+  }
 
-    return session.id;
+  /**
+   * Abbandona o chiudi una sessione attiva
+   */
+  async abandonSession(sessionId) {
+    if (!sessionId) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        await supabase.functions.invoke('scopa', {
+          body: { action: 'concede', sessionId },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+    } catch (err) {
+      console.warn('[FriendsManager] Errore abbandono sessione:', err);
+    }
+    this.currentActiveSessionId = null;
+    await this.refreshAll();
   }
 
   subscribe(callback) {

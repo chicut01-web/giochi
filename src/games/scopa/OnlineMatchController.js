@@ -27,9 +27,28 @@ export class OnlineMatchController {
     });
 
     if (error) {
-      console.warn('[OnlineMatchController] errore', action, error);
-      return { error: 'network' };
+      let errBody = null;
+      try {
+        if (error.context && typeof error.context.json === 'function') {
+          errBody = await error.context.json();
+        }
+      } catch (e) {
+        // ignore json parse error
+      }
+      console.warn('[OnlineMatchController] errore', action, error, errBody);
+
+      if (errBody?.view) {
+        this.view = { ...errBody.view, connected: this.connected };
+        this.timeoutClaimed = false;
+        this.emit();
+      }
+      return {
+        error: errBody?.error || 'network',
+        view: errBody?.view,
+        status: error.status
+      };
     }
+
     if (data?.view) {
       this.view = { ...data.view, connected: this.connected };
       this.timeoutClaimed = false;
