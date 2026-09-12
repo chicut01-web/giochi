@@ -3397,3 +3397,157 @@ dialog[open]::backdrop {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
 }
+
+/* ==========================================================================
+   CHALLENGE WAITING OVERLAY & MODAL
+   ========================================================================== */
+
+.challenge-waiting-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(8, 20, 14, 0.92);
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.25s ease;
+  padding: 24px;
+}
+
+.challenge-waiting-card {
+  width: 100%;
+  max-width: 400px;
+  background: linear-gradient(170deg, #133322 0%, #0a1f14 100%);
+  border: 1px solid rgba(245, 197, 66, 0.5);
+  border-radius: 16px;
+  padding: 28px 22px;
+  text-align: center;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(245, 197, 66, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.waiting-sword-spin {
+  font-size: 3rem;
+  animation: swordPulse 1.8s infinite ease-in-out;
+  filter: drop-shadow(0 4px 12px rgba(245, 197, 66, 0.6));
+}
+
+@keyframes swordPulse {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.15) rotate(15deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.waiting-card-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.waiting-card-title strong {
+  color: #f5c542;
+}
+
+.waiting-card-desc {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #c0d8c7;
+  line-height: 1.4;
+}
+
+.waiting-pulse-dots {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.waiting-pulse-dots .wdot {
+  width: 10px;
+  height: 10px;
+  background: #f5c542;
+  border-radius: 50%;
+  animation: dotPulse 1.4s infinite ease-in-out both;
+  box-shadow: 0 0 8px rgba(245, 197, 66, 0.6);
+}
+
+.waiting-pulse-dots .wdot:nth-child(1) { animation-delay: -0.32s; }
+.waiting-pulse-dots .wdot:nth-child(2) { animation-delay: -0.16s; }
+.waiting-pulse-dots .wdot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes dotPulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1.1); opacity: 1; }
+}
+
+.waiting-countdown-text {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #9cb8a5;
+}
+
+.waiting-card-actions {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.waiting-cancel-btn {
+  width: 100%;
+  padding: 10px 16px;
+  background: rgba(220, 53, 69, 0.15);
+  border: 1px solid rgba(220, 53, 69, 0.4);
+  color: #ff8a93;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.waiting-cancel-btn:hover {
+  background: rgba(220, 53, 69, 0.3);
+  border-color: rgba(220, 53, 69, 0.7);
+  color: #fff;
+}
+
+/* ==========================================================================
+   RECEIVED CHALLENGES IN FRIENDS MODAL REQUESTS TAB
+   ========================================================================== */
+
+.received-challenges-section {
+  background: rgba(245, 197, 66, 0.06);
+  border: 1px solid rgba(245, 197, 66, 0.3);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.received-challenges-section .requests-section-title {
+  color: #f5c542;
+  margin-bottom: 10px;
+}
+
+.challenge-invite-card {
+  background: rgba(18, 44, 28, 0.8) !important;
+  border: 1px solid rgba(245, 197, 66, 0.4) !important;
+}
+
+.challenge-avatar {
+  background: linear-gradient(135deg, rgba(245, 197, 66, 0.3), rgba(212, 159, 27, 0.2)) !important;
+}
+
+.challenge-accept-btn {
+  background: linear-gradient(135deg, #f5c542, #d49f1b) !important;
+  color: #11261a !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(245, 197, 66, 0.4);
+}
+

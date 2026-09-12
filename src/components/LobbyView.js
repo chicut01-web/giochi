@@ -20,6 +20,7 @@ export class LobbyView {
   }
 
   render() {
+    this.joinedSessionId = null;
     const stats = gameManager.stats.scopa;
     const winRate = stats.matchesPlayed > 0 
       ? Math.round((stats.matchesWon / stats.matchesPlayed) * 100) 
@@ -340,7 +341,7 @@ export class LobbyView {
           friendsManager.findActiveSession().then(sessionId => {
             if (sessionId && gameManager.getView() === 'lobby') {
               this.joinedSessionId = sessionId;
-              gameManager.setView('scopa', { sessionId });
+              friendsManager.handleSessionAutoJoin(sessionId);
             }
           });
         }
@@ -378,7 +379,7 @@ export class LobbyView {
               try {
                 const sessionId = await friendsManager.acceptGameInvite(invId);
                 this.joinedSessionId = sessionId;
-                gameManager.setView('scopa', { sessionId });
+                friendsManager.handleSessionAutoJoin(sessionId);
               } catch (err) {
                 alert(err.message || 'Impossibile avviare la partita.');
                 btn.disabled = false;

@@ -5,6 +5,16 @@ import { soundFx } from '../core/SoundFx.js';
 import { gameManager } from '../core/GameManager.js';
 import { authManager } from '../core/AuthManager.js';
 
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, m => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[m]);
+}
+
 export class FriendsModal {
   constructor() {
     this.currentTab = 'friends'; // friends | search | requests
@@ -44,6 +54,7 @@ export class FriendsModal {
   }
 
   close() {
+    this.removeWaitingOverlay();
     this.dialog?.close();
   }
 
@@ -147,7 +158,7 @@ export class FriendsModal {
 
     const reqCountEl = document.getElementById('ftab-count-requests');
     if (reqCountEl) {
-      const incomingCount = state.incomingRequests.length;
+      const incomingCount = state.incomingRequests.length + (state.incomingInvites?.length || 0);
       reqCountEl.textContent = incomingCount;
       if (incomingCount > 0) {
         reqCountEl.classList.remove('hidden');
@@ -161,7 +172,7 @@ export class FriendsModal {
     } else if (this.currentTab === 'search') {
       this.renderSearchTab(body);
     } else if (this.currentTab === 'requests') {
-      this.renderRequestsTab(body, state.incomingRequests, state.outgoingRequests);
+      this.renderRequestsTab(body, state.incomingRequests, state.outgoingRequests, state.incomingInvites || []);
     }
   }
 
@@ -220,13 +231,11 @@ export class FriendsModal {
         btn.innerHTML = '<span>Invio...</span>';
 
         try {
-          await friendsManager.sendGameInvite(friendId, 'scopa');
+          const invite = await friendsManager.sendGameInvite(friendId, 'scopa');
           soundFx.playWin();
-          btn.innerHTML = '<span>Sfida Inviata! ✓</span>';
-          setTimeout(() => {
-            btn.disabled = false;
-            btn.innerHTML = '<span>⚔️ Sfida</span>';
-          }, 2500);
+          btn.disabled = false;
+          btn.innerHTML = '<span>⚔️ Sfida</span>';
+          this.showWaitingChallengeModal(invite, friendName);
         } catch (err) {
           soundFx.playSnap();
           alert(err.message || 'Errore durante l\'invio della sfida.');
@@ -249,6 +258,93 @@ export class FriendsModal {
         }
       });
     });
+  }
+
+  showWaitingChallengeModal(invite, friendName) {
+    if (!this.dialog) return;
+
+    this.removeWaitingOverlay();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'challenge-waiting-overlay';
+    overlay.className = 'challenge-waiting-overlay';
+    overlay.innerHTML = `
+      <div class="challenge-waiting-card">
+        <div class="waiting-sword-spin">⚔️</div>
+        <h3 class="waiting-card-title">Sfida Inviata a <strong>${escapeHtml(friendName)}</strong>!</h3>
+        <p class="waiting-card-desc">In attesa che l'avversario accetti la partita a Scopa...</p>
+        
+        <div class="waiting-pulse-dots">
+          <span class="wdot"></span>
+          <span class="wdot"></span>
+          <span class="wdot"></span>
+        </div>
+
+        <div class="waiting-countdown-text" id="waiting-countdown-text">In attesa di risposta (60s)...</div>
+
+        <div class="waiting-card-actions">
+          <button class="dialog-cancel-btn waiting-cancel-btn" id="btn-cancel-challenge-waiting">
+            Annulla Sfida
+          </button>
+        </div>
+      </div>
+    `;
+
+    const content = this.dialog.querySelector('.friends-modal-content');
+    if (content) {
+      content.appendChild(overlay);
+    } else {
+      this.dialog.appendChild(overlay);
+    }
+
+    let secondsLeft = 60;
+    const countdownEl = document.getElementById('waiting-countdown-text');
+    const countdownTimer = setInterval(() => {
+      secondsLeft--;
+      if (countdownEl) {
+        countdownEl.textContent = `In attesa di risposta (${secondsLeft}s)...`;
+      }
+      if (secondsLeft <= 0) {
+        clearInterval(countdownTimer);
+      }
+    }, 1000);
+
+    const cleanupWaiting = () => {
+      clearInterval(countdownTimer);
+      this.removeWaitingOverlay();
+    };
+
+    // Gestione annulla sfida
+    document.getElementById('btn-cancel-challenge-waiting')?.addEventListener('click', async () => {
+      soundFx.playSnap();
+      cleanupWaiting();
+      await friendsManager.cancelGameInvite(invite.id);
+    });
+
+    // Avvia listener di attesa su FriendsManager
+    friendsManager.startWaitingForChallenge(invite.id, {
+      onAccepted: (sessionId) => {
+        cleanupWaiting();
+        this.close();
+        friendsManager.handleSessionAutoJoin(sessionId);
+      },
+      onDeclined: () => {
+        cleanupWaiting();
+        alert(`${friendName} ha rifiutato la sfida.`);
+      },
+      onTimeout: () => {
+        cleanupWaiting();
+        alert(`Nessuna risposta da ${friendName}. La sfida è scaduta.`);
+        friendsManager.cancelGameInvite(invite.id);
+      }
+    });
+  }
+
+  removeWaitingOverlay() {
+    const existing = document.getElementById('challenge-waiting-overlay');
+    if (existing) {
+      existing.remove();
+    }
   }
 
   renderSearchTab(container) {
@@ -391,13 +487,13 @@ export class FriendsModal {
     });
   }
 
-  renderRequestsTab(container, incoming, outgoing) {
-    if (incoming.length === 0 && outgoing.length === 0) {
+  renderRequestsTab(container, incoming, outgoing, incomingInvites = []) {
+    if (incoming.length === 0 && outgoing.length === 0 && incomingInvites.length === 0) {
       container.innerHTML = `
         <div class="friends-empty-state">
           <div class="empty-icon">📭</div>
-          <h3>Nessuna richiesta in sospeso</h3>
-          <p>Quando qualcuno ti invia una richiesta di amicizia o accetta la tua, la troverai qui.</p>
+          <h3>Nessuna richiesta o sfida</h3>
+          <p>Quando qualcuno ti invia una sfida di gioco o una richiesta di amicizia, la troverai qui.</p>
         </div>
       `;
       return;
@@ -405,9 +501,37 @@ export class FriendsModal {
 
     container.innerHTML = `
       <div class="requests-sections-wrap">
-        <!-- RICEVUTE -->
+        <!-- SFIDE DI GIOCO RICEVUTE -->
+        ${incomingInvites.length > 0 ? `
+          <section class="requests-sub-section received-challenges-section">
+            <h4 class="requests-section-title">⚔️ Sfide di Gioco in Arrivo (${incomingInvites.length})</h4>
+            <ul class="friends-card-list">
+              ${incomingInvites.map(inv => `
+                <li class="friend-card challenge-invite-card" data-inv-id="${inv.id}">
+                  <div class="friend-card-avatar challenge-avatar">
+                    <span>⚔️</span>
+                  </div>
+                  <div class="friend-card-info">
+                    <span class="friend-username">${escapeHtml(inv.fromUsername)}</span>
+                    <span class="friend-subtext">Ti ha sfidato a Scopa!</span>
+                  </div>
+                  <div class="friend-card-actions">
+                    <button class="action-btn accept-btn challenge-accept-btn" data-action="accept-invite" data-inv-id="${inv.id}">
+                      <span>✓ Accetta</span>
+                    </button>
+                    <button class="action-btn reject-btn" data-action="reject-invite" data-inv-id="${inv.id}">
+                      <span>✕ Rifiuta</span>
+                    </button>
+                  </div>
+                </li>
+              `).join('')}
+            </ul>
+          </section>
+        ` : ''}
+
+        <!-- RICHIESTE AMICIZIA RICEVUTE -->
         <section class="requests-sub-section">
-          <h4 class="requests-section-title">Richieste Ricevute (${incoming.length})</h4>
+          <h4 class="requests-section-title">Richieste di Amicizia Ricevute (${incoming.length})</h4>
           ${incoming.length === 0 ? `
             <p class="requests-sub-empty">Non hai richieste di amicizia in arrivo.</p>
           ` : `
@@ -418,7 +542,7 @@ export class FriendsModal {
                     <span>👤</span>
                   </div>
                   <div class="friend-card-info">
-                    <span class="friend-username">${req.username}</span>
+                    <span class="friend-username">${escapeHtml(req.username)}</span>
                     <span class="friend-subtext">Vuole aggiungerti agli amici</span>
                   </div>
                   <div class="friend-card-actions">
@@ -448,7 +572,7 @@ export class FriendsModal {
                     <span>👤</span>
                   </div>
                   <div class="friend-card-info">
-                    <span class="friend-username">${req.username}</span>
+                    <span class="friend-username">${escapeHtml(req.username)}</span>
                     <span class="friend-subtext">In attesa di conferma</span>
                   </div>
                   <div class="friend-card-actions">
@@ -464,7 +588,40 @@ export class FriendsModal {
       </div>
     `;
 
-    // Actions for incoming
+    // Actions for game invites
+    container.querySelectorAll('button[data-action="accept-invite"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const invId = btn.getAttribute('data-inv-id');
+        soundFx.playWin();
+        btn.disabled = true;
+        btn.innerHTML = '<span>Avvio...</span>';
+        try {
+          const sessionId = await friendsManager.acceptGameInvite(invId);
+          this.close();
+          friendsManager.handleSessionAutoJoin(sessionId);
+        } catch (err) {
+          alert(err.message || 'Impossibile avviare la partita.');
+          btn.disabled = false;
+          btn.innerHTML = '<span>✓ Accetta</span>';
+        }
+      });
+    });
+
+    container.querySelectorAll('button[data-action="reject-invite"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const invId = btn.getAttribute('data-inv-id');
+        soundFx.playSnap();
+        btn.disabled = true;
+        try {
+          await friendsManager.respondToGameInvite(invId, false);
+        } catch (err) {
+          alert(err.message || 'Errore nel rifiutare la sfida.');
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Actions for incoming friend requests
     container.querySelectorAll('button[data-action="accept-req"]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const reqId = btn.getAttribute('data-req-id');
@@ -493,7 +650,7 @@ export class FriendsModal {
       });
     });
 
-    // Action for cancel outgoing
+    // Action for cancel outgoing friend request
     container.querySelectorAll('button[data-action="cancel-req"]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const reqId = btn.getAttribute('data-req-id');

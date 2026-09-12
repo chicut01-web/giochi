@@ -2,6 +2,8 @@
 
 import { supabase } from './supabaseClient.js';
 import { authManager } from './AuthManager.js';
+import { gameManager } from './GameManager.js';
+import { soundFx } from './SoundFx.js';
 
 class FriendsManager {
   constructor() {
@@ -12,6 +14,8 @@ class FriendsManager {
     this.cachedIncomingRequests = [];
     this.cachedOutgoingRequests = [];
     this.cachedIncomingInvites = [];
+    this.activeWaitingChallenge = null;
+    this.currentActiveSessionId = null;
 
     // Start polling / listening when user is authenticated
     authManager.onAuthChange(({ isAuthenticated }) => {
@@ -34,10 +38,11 @@ class FriendsManager {
 
   startSync() {
     this.refreshAll();
+    this.setupRealtime();
     if (!this.pollInterval) {
       this.pollInterval = setInterval(() => {
         this.refreshAll();
-      }, 6000);
+      }, 5000);
     }
   }
 
@@ -50,6 +55,68 @@ class FriendsManager {
       supabase.removeChannel(this.realtimeChannel);
       this.realtimeChannel = null;
     }
+    this.stopWaitingForChallenge();
+  }
+
+  setupRealtime() {
+    const user = authManager.getUser();
+    if (!user) return;
+
+    if (this.realtimeChannel) {
+      supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+
+    // Ascolta la creazione di nuove sessioni attive per questo utente
+    this.realtimeChannel = supabase
+      .channel(`user_sessions_global_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'game_sessions'
+        },
+        (payload) => {
+          const session = payload.new;
+          if (session && session.status === 'active') {
+            if (session.player_a === user.id || session.player_b === user.id) {
+              console.log('[FriendsManager] Nuova partita online rilevata via Realtime:', session.id);
+              this.handleSessionAutoJoin(session.id);
+            }
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[FriendsManager] Realtime sessioni connesso con successo');
+        }
+      });
+  }
+
+  /**
+   * Catapulta il giocatore al tavolo quando una sfida viene accettata
+   */
+  handleSessionAutoJoin(sessionId) {
+    if (!sessionId) return;
+    if (this.currentActiveSessionId === sessionId && gameManager.getView() === 'scopa') {
+      return;
+    }
+    this.currentActiveSessionId = sessionId;
+
+    // Chiudi eventuale attesa sfida attiva
+    this.stopWaitingForChallenge();
+
+    // Chiudi tutti i modali che potrebbero coprire il tavolo
+    document.querySelectorAll('dialog[open]').forEach(d => {
+      try { d.close(); } catch {}
+    });
+
+    // Effetto sonoro inizio partita
+    soundFx.playWin();
+
+    // Entra al tavolo di Scopa
+    gameManager.setView('scopa', { sessionId });
   }
 
   async refreshAll() {
@@ -450,6 +517,128 @@ class FriendsManager {
   }
 
   /**
+   * Annulla o rifiuta una sfida di gioco inviata
+   */
+  async cancelGameInvite(inviteId) {
+    const user = authManager.getUser();
+    if (!user || !inviteId) return;
+
+    this.stopWaitingForChallenge();
+
+    try {
+      const { error } = await supabase
+        .from('game_invites')
+        .delete()
+        .eq('id', inviteId)
+        .eq('from_user_id', user.id);
+
+      if (error) {
+        // Fallback: segna come declined
+        await supabase
+          .from('game_invites')
+          .update({ status: 'declined', updated_at: new Date().toISOString() })
+          .eq('id', inviteId);
+      }
+    } catch (err) {
+      console.warn('[FriendsManager] Errore annullamento sfida:', err);
+    }
+  }
+
+  /**
+   * Attende che l'avversario accetti o rifiuti la sfida inviata
+   */
+  startWaitingForChallenge(inviteId, { onAccepted, onDeclined, onTimeout, timeoutMs = 60000 }) {
+    this.stopWaitingForChallenge();
+
+    let isDone = false;
+    const startTime = Date.now();
+
+    const finish = (result, param) => {
+      if (isDone) return;
+      isDone = true;
+      this.stopWaitingForChallenge();
+      if (result === 'accepted' && onAccepted) onAccepted(param);
+      if (result === 'declined' && onDeclined) onDeclined();
+      if (result === 'timeout' && onTimeout) onTimeout();
+    };
+
+    // 1. Polling rapido ogni 1200ms su game_invites
+    const pollInterval = setInterval(async () => {
+      if (isDone) return;
+
+      if (Date.now() - startTime >= timeoutMs) {
+        finish('timeout');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('game_invites')
+          .select('status, session_id')
+          .eq('id', inviteId)
+          .single();
+
+        if (error || !data) return;
+
+        if (data.status === 'accepted' && data.session_id) {
+          finish('accepted', data.session_id);
+        } else if (data.status === 'declined') {
+          finish('declined');
+        }
+      } catch (err) {
+        console.warn('[FriendsManager] Errore polling stato sfida:', err);
+      }
+    }, 1200);
+
+    // 2. Realtime listener specifico per la sessione generata
+    const user = authManager.getUser();
+    let channel = null;
+    if (user) {
+      channel = supabase
+        .channel(`wait_invite_${inviteId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'game_sessions'
+          },
+          (payload) => {
+            const session = payload.new;
+            if (session && session.status === 'active' && session.player_a === user.id) {
+              finish('accepted', session.id);
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    this.activeWaitingChallenge = {
+      inviteId,
+      pollInterval,
+      channel,
+      stop: () => {
+        clearInterval(pollInterval);
+        if (channel) supabase.removeChannel(channel);
+        this.activeWaitingChallenge = null;
+      }
+    };
+
+    return () => {
+      if (!isDone) {
+        isDone = true;
+        this.stopWaitingForChallenge();
+      }
+    };
+  }
+
+  stopWaitingForChallenge() {
+    if (this.activeWaitingChallenge) {
+      this.activeWaitingChallenge.stop();
+    }
+  }
+
+  /**
    * Fetch incoming game invites
    */
   async fetchIncomingGameInvites() {
@@ -538,14 +727,21 @@ class FriendsManager {
 
     const { data, error } = await supabase
       .from('game_sessions')
-      .select('id')
+      .select('id, created_at, updated_at')
       .eq('status', 'active')
       .or(`player_a.eq.${user.id},player_b.eq.${user.id}`)
       .order('updated_at', { ascending: false })
       .limit(1);
 
     if (error || !data || data.length === 0) return null;
-    return data[0].id;
+
+    const session = data[0];
+    const sessionTime = new Date(session.updated_at || session.created_at).getTime();
+    if (Date.now() - sessionTime > 2 * 60 * 60 * 1000) {
+      return null;
+    }
+
+    return session.id;
   }
 
   subscribe(callback) {

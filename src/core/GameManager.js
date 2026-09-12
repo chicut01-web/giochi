@@ -67,6 +67,11 @@ class GameManager {
 
   setView(viewName, params = {}) {
     this.currentView = viewName;
+    if (viewName === 'scopa') {
+      try {
+        document.querySelectorAll('dialog[open]').forEach(d => d.close());
+      } catch {}
+    }
     this.viewListeners.forEach(fn => fn(viewName, params));
   }
 
