@@ -50,8 +50,10 @@ export class OnlineMatchController {
     }
 
     if (data?.view) {
+      if (this.view?.version !== data.view.version) {
+        this.timeoutClaimed = false;
+      }
       this.view = { ...data.view, connected: this.connected };
-      this.timeoutClaimed = false;
       this.emit();
     }
     return data || {};
@@ -105,10 +107,10 @@ export class OnlineMatchController {
   checkDeadline() {
     if (!this.view || this.view.status !== 'active' || !this.view.turnDeadline) return;
     if (this.timeoutClaimed) return;
-    if (new Date(this.view.turnDeadline).getTime() > Date.now()) return;
+    const deadlineMs = new Date(this.view.turnDeadline).getTime();
+    if (Date.now() < deadlineMs) return;
 
-    this.timeoutClaimed = true;
-    this.call('timeout');
+    this.claimTimeout();
   }
 
   getView() {
@@ -126,7 +128,22 @@ export class OnlineMatchController {
   }
 
   async claimTimeout() {
-    await this.call('timeout');
+    if (!this.view || this.view.status !== 'active') return;
+    this.timeoutClaimed = true;
+    const res = await this.call('timeout');
+    if (res?.error === 'not_expired') {
+      // Se il server dice non scaduto per lieve skew di clock fra client e server, riprova tra 1.2s
+      setTimeout(() => {
+        this.timeoutClaimed = false;
+        if (this.view?.status === 'active' && this.view?.turnDeadline) {
+          if (Date.now() >= new Date(this.view.turnDeadline).getTime()) {
+            this.claimTimeout();
+          }
+        }
+      }, 1200);
+    } else if (res?.error) {
+      this.timeoutClaimed = false;
+    }
   }
 
   async nextRound() {

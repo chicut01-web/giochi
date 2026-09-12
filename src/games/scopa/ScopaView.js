@@ -14,8 +14,10 @@ export class ScopaView {
     this.view = null;
     this.unsubscribe = null;
     this.pendingMoves = [];
-    this.lastQueuedMove = null;
-    this.isProcessing = false;
+    this.lastProcessedMoveKey = null;
+    this.currentTurnKey = null;
+    this.isSubmittingMove = false;
+    this.isAnimatingQueue = false;
     this.timerSeconds = 10;
     this.timerInterval = null;
     this.timerRole = null;
@@ -34,8 +36,11 @@ export class ScopaView {
     }
     this.view = null;
     this.pendingMoves = [];
-    this.lastQueuedMove = null;
-    this.isProcessing = false;
+    this.lastProcessedMoveKey = null;
+    this.currentTurnKey = null;
+    this.isSubmittingMove = false;
+    this.isAnimatingQueue = false;
+    document.querySelectorAll('.flying-card-live').forEach(el => el.remove());
   }
 
   init(options = {}) {
@@ -61,10 +66,18 @@ export class ScopaView {
           username: authManager.getNickname() || 'Tu'
         });
 
-    this.isProcessing = false;
     this.unsubscribe = this.match.onChange(view => this.onMatchUpdate(view));
     this.renderLayout();
     this.match.start();
+  }
+
+  getMoveKey(view) {
+    if (!view || !view.lastMove) return null;
+    const lm = view.lastMove;
+    const cardId = lm.card?.id || 'none';
+    const caps = (lm.capturedCards || []).map(c => c.id).sort().join('-');
+    const ver = view.version !== undefined ? `v${view.version}` : 'v0';
+    return `${ver}_seat${lm.seat}_c${cardId}_cap[${caps}]_scopa${lm.isScopa ? 1 : 0}_rnd${view.roundNumber}`;
   }
 
   onMatchUpdate(view) {
@@ -74,51 +87,95 @@ export class ScopaView {
     // Se la partita è stata abbandonata da un giocatore
     if (view.status === 'abandoned') {
       this.stopTurnTimer();
-      this.isProcessing = false;
-      const isWinner = view.matchWinnerSeat === view.you.seat;
+      this.isSubmittingMove = false;
+      this.isAnimatingQueue = false;
+      const isWinner = view.matchWinnerSeat === view.you?.seat;
       this.showAbandonedModal(isWinner);
       return;
     }
 
-    // Le mosse vanno accodate, non disegnate appena arrivano: il computer
-    // gioca dopo 900ms mentre l'animazione precedente dura circa 1,5s, e
-    // online possono arrivare due aggiornamenti ravvicinati.
-    if (view.lastMove && view.lastMove !== this.lastQueuedMove) {
-      this.lastQueuedMove = view.lastMove;
+    // Se la partita è terminata
+    if (view.status === 'finished' && view.isMatchOver) {
+      this.stopTurnTimer();
+      this.isSubmittingMove = false;
+      this.isAnimatingQueue = false;
+      this.updateBoard();
+      if (view.roundResult) {
+        setTimeout(() => this.showRoundSummary(view.roundResult), 600);
+      }
+      return;
+    }
+
+    const moveKey = this.getMoveKey(view);
+
+    // Primo aggiornamento della vista: sincronizza il tavolo senza rianimare mosse passate
+    if (this.lastProcessedMoveKey === null) {
+      this.lastProcessedMoveKey = moveKey;
+      this.updateBoard();
+      this.syncTurnState();
+      return;
+    }
+
+    // Nuova mossa effettiva ricevuta
+    if (moveKey && moveKey !== this.lastProcessedMoveKey) {
+      this.lastProcessedMoveKey = moveKey;
       this.pendingMoves.push(view.lastMove);
       this.drainMoveQueue();
       return;
     }
 
-    if (this.isProcessing) return;
+    // Poll periodico o duplicato: aggiorna solo se non c'è un'animazione in volo
+    if (this.isAnimatingQueue) return;
     this.updateBoard();
     this.syncTurnState();
   }
 
   async drainMoveQueue() {
-    if (this.isProcessing) return;
+    if (this.isAnimatingQueue) return;
+    this.isAnimatingQueue = true;
 
-    while (this.pendingMoves.length > 0) {
-      const move = this.pendingMoves.shift();
-      await this.playMoveSequence(move);
-      if (this.view && this.view.isRoundOver) return;
+    try {
+      while (this.pendingMoves.length > 0) {
+        const move = this.pendingMoves.shift();
+        await this.playMoveSequence(move);
+        if (this.view && (this.view.isRoundOver || this.view.isMatchOver)) break;
+      }
+    } finally {
+      this.isAnimatingQueue = false;
+      this.updateBoard();
+      this.syncTurnState();
     }
-
-    this.syncTurnState();
   }
 
   syncTurnState() {
     if (!this.view || this.view.status !== 'active') return;
 
-    if (this.view.isRoundOver) {
+    if (this.view.isRoundOver || this.view.isMatchOver) {
       this.stopTurnTimer();
       return;
     }
 
-    this.startTurnTimer(this.view.isYourTurn ? 'player' : 'cpu');
+    const role = this.view.isYourTurn ? 'player' : 'cpu';
+    const turnKey = `${this.view.version || 0}_${this.view.isYourTurn ? 1 : 2}_rnd${this.view.roundNumber}`;
+
+    if (this.currentTurnKey === turnKey && this.timerInterval) {
+      // Il turno è già attivo: sincronizza solo in caso di drift server > 2s
+      if (this.view.turnDeadline) {
+        const remainingMs = new Date(this.view.turnDeadline).getTime() - Date.now();
+        const serverSec = Math.max(0, Math.ceil(remainingMs / 1000));
+        if (Math.abs(this.timerSeconds - serverSec) > 2) {
+          this.timerSeconds = serverSec;
+          this.updateTimerDisplay();
+        }
+      }
+      return;
+    }
+
+    this.currentTurnKey = turnKey;
+    this.startTurnTimer(role);
 
     if (this.view.isYourTurn) {
-      this.setNarrator('👤', `È il tuo turno: seleziona una carta da giocare (${this.view.turnSeconds}s)`);
+      this.setNarrator('👤', `È il tuo turno: seleziona una carta da giocare (${this.timerSeconds}s)`);
     } else {
       this.setNarrator(
         this.view.mode === 'local' ? '🤖' : '👤',
@@ -407,7 +464,7 @@ export class ScopaView {
     document.getElementById('next-round-btn')?.addEventListener('click', async () => {
       const dialog = document.getElementById('round-score-dialog');
       dialog?.close();
-      this.isProcessing = false;
+      this.isSubmittingMove = false;
       this.stopTurnTimer();
 
       if (this.view?.isMatchOver) {
@@ -423,11 +480,11 @@ export class ScopaView {
     const choiceDialog = document.getElementById('capture-choice-dialog');
     document.getElementById('cancel-capture-choice-btn')?.addEventListener('click', () => {
       choiceDialog?.close();
-      this.isProcessing = false;
+      this.isSubmittingMove = false;
       this.resumeTimer();
     });
     choiceDialog?.addEventListener('cancel', () => {
-      this.isProcessing = false;
+      this.isSubmittingMove = false;
       this.resumeTimer();
     });
   }
@@ -441,13 +498,26 @@ export class ScopaView {
     if (!this.view || this.view.isRoundOver || this.view.isMatchOver) return;
 
     this.timerRole = role;
-    this.timerSeconds = this.view.turnSeconds || 10;
+
+    if (this.view.turnDeadline) {
+      const remainingMs = new Date(this.view.turnDeadline).getTime() - Date.now();
+      this.timerSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+    } else {
+      this.timerSeconds = this.view.turnSeconds || 10;
+    }
+
     this.updateTimerDisplay();
 
     this.timerInterval = setInterval(() => {
       if (this.isTimerPaused) return;
 
-      this.timerSeconds -= 1;
+      if (this.view?.turnDeadline) {
+        const remainingMs = new Date(this.view.turnDeadline).getTime() - Date.now();
+        this.timerSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+      } else {
+        this.timerSeconds -= 1;
+      }
+
       this.updateTimerDisplay();
 
       if (this.timerSeconds <= 0) {
@@ -500,7 +570,7 @@ export class ScopaView {
   onTimerExpired() {
     if (!this.view || this.view.status !== 'active' || this.view.isRoundOver) return;
 
-    this.isProcessing = false;
+    this.isSubmittingMove = false;
     const choiceDialog = document.getElementById('capture-choice-dialog');
     if (choiceDialog?.open) choiceDialog.close();
 
@@ -514,6 +584,9 @@ export class ScopaView {
 
   updateBoard() {
     if (!this.view) return;
+    if (!this.isAnimatingQueue) {
+      document.querySelectorAll('.flying-card-live').forEach(el => el.remove());
+    }
 
     // Aggiornamento nomi e avatar avversario
     const oppName = document.getElementById('opponent-name');
@@ -651,7 +724,7 @@ export class ScopaView {
     container.innerHTML = hand.map((card, idx) => {
       const total = hand.length;
       const rot = (idx - (total - 1) / 2) * 2.5;
-      const isTurn = this.view.isYourTurn && !this.isProcessing;
+      const isTurn = this.view.isYourTurn && !this.isSubmittingMove && !this.isAnimatingQueue;
 
       return `
         <button class="card-wrapper player-card ${isTurn ? 'card-playable' : 'card-disabled'}" 
@@ -685,8 +758,8 @@ export class ScopaView {
      ========================================================================= */
 
   async onPlayerCardClick(cardId) {
-    if (this.isProcessing) return;
-    if (!this.view || this.view.isRoundOver) return;
+    if (this.isSubmittingMove || this.isAnimatingQueue) return;
+    if (!this.view || this.view.isRoundOver || this.view.isMatchOver) return;
 
     if (!this.view.isYourTurn) {
       this.setNarrator('⏳', 'Non è il tuo turno! Attendi l\'avversario.');
@@ -711,11 +784,14 @@ export class ScopaView {
     }
 
     const chosenCombo = captureOptions.options.length > 0 ? captureOptions.options[0] : null;
-    this.isProcessing = true;
-    const res = await this.match.playCard(card.id, chosenCombo);
-    if (!res.ok) {
-      this.isProcessing = false;
-      this.handleMoveError(res.error);
+    this.isSubmittingMove = true;
+    try {
+      const res = await this.match.playCard(card.id, chosenCombo);
+      if (!res.ok) {
+        this.handleMoveError(res.error);
+      }
+    } finally {
+      this.isSubmittingMove = false;
     }
   }
 
@@ -734,7 +810,6 @@ export class ScopaView {
   }
 
   promptCaptureChoice(playedCard, options) {
-    this.isProcessing = true;
     const dialog = document.getElementById('capture-choice-dialog');
     const grid = document.getElementById('capture-options-grid');
     if (!dialog || !grid) return;
@@ -759,15 +834,19 @@ export class ScopaView {
         const idx = parseInt(cardEl.getAttribute('data-option-idx'), 10);
         dialog.close();
         this.resumeTimer();
-        const res = await this.match.playCard(playedCard.id, options[idx]);
-        if (!res.ok) {
-          this.isProcessing = false;
-          this.handleMoveError(res.error);
+        this.isSubmittingMove = true;
+        try {
+          const res = await this.match.playCard(playedCard.id, options[idx]);
+          if (!res.ok) {
+            this.handleMoveError(res.error);
+          }
+        } finally {
+          this.isSubmittingMove = false;
         }
       });
     });
 
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
   }
 
   /* =========================================================================
@@ -1250,6 +1329,6 @@ export class ScopaView {
       </table>
     `;
 
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
   }
 }

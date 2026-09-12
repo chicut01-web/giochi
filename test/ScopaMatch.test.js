@@ -177,3 +177,19 @@ test('buildView normalizza roundResult per Seat 1 e Seat 2', () => {
   assert.equal(viewSeat2.roundResult.settebello.points.you, 0);
   assert.equal(viewSeat2.roundResult.settebello.points.opponent, 1);
 });
+
+test('LocalMatchController incrementa version ad ogni mossa', async () => {
+  const { LocalMatchController } = await import('../src/games/scopa/LocalMatchController.js');
+  const ctrl = new LocalMatchController({ targetScore: 11, username: 'Tester' });
+  await ctrl.start();
+  const v1 = ctrl.getView();
+  assert.equal(v1.version, 1);
+
+  if (v1.isYourTurn && v1.you.hand.length > 0) {
+    const cardId = v1.you.hand[0].id;
+    const res = await ctrl.playCard(cardId);
+    assert.equal(res.ok, true);
+    const v2 = ctrl.getView();
+    assert.equal(v2.version, 2);
+  }
+});

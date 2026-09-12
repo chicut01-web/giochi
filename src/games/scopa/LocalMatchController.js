@@ -13,9 +13,11 @@ export class LocalMatchController {
     this.snapshot = null;
     this.status = 'active';
     this.cpuTimeout = null;
+    this.version = 1;
   }
 
   async start() {
+    this.version = 1;
     this.snapshot = createMatch(this.targetScore);
     this.status = 'active';
     this.emit();
@@ -31,7 +33,7 @@ export class LocalMatchController {
       status: this.status,
       turnSeat: this.snapshot.turnSeat,
       turnDeadline: null,
-      version: 0,
+      version: this.version,
       usernames: { 1: this.username, 2: 'CPU Master' },
       mode: 'local',
       turnSeconds: TURN_SECONDS
@@ -42,6 +44,7 @@ export class LocalMatchController {
     const res = applyMove(this.snapshot.secret, 1, cardId, chosenOption);
     if (!res.ok) return { ok: false, error: res.error };
 
+    this.version++;
     this.snapshot = res.snapshot;
     this.afterMove();
     return { ok: true };
@@ -53,6 +56,7 @@ export class LocalMatchController {
     const res = autoMove(this.snapshot.secret, this.snapshot.turnSeat);
     if (!res.ok) return;
 
+    this.version++;
     this.snapshot = res.snapshot;
     this.afterMove();
   }
@@ -63,6 +67,7 @@ export class LocalMatchController {
     const res = nextRound(this.snapshot.secret);
     if (!res.ok) return { ok: false, error: res.error };
 
+    this.version++;
     this.snapshot = res.snapshot;
     this.emit();
     this.maybePlayCpu();
@@ -92,6 +97,7 @@ export class LocalMatchController {
     this.cpuTimeout = setTimeout(() => {
       const res = autoMove(this.snapshot.secret, 2);
       if (!res.ok) return;
+      this.version++;
       this.snapshot = res.snapshot;
       this.afterMove();
     }, CPU_THINKING_MS);
