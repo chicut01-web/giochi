@@ -654,6 +654,11 @@ export class ScopaView {
     // Update board with clean state
     this.updateBoard();
 
+    // Clean up flying card right as new table card is inserted
+    if (playedFlyEl && playedFlyEl.parentNode) {
+      playedFlyEl.remove();
+    }
+
     // 5. Scopa celebration
     if (result.isScopa) {
       this.triggerScopaCelebration(isPlayer ? '✨ Hai fatto Scopa! (+1) ✨' : '🤖 La CPU ha fatto Scopa! (+1)');
@@ -832,6 +837,15 @@ export class ScopaView {
       }
     }
 
+    // Lock the card in its physical resting place on the green felt
+    flyEl.style.left = `${targetX}px`;
+    flyEl.style.top = `${targetY}px`;
+    flyEl.style.transform = `rotate(${landingRot}deg)`;
+    flyEl.dataset.landingRot = `${landingRot}`;
+    try {
+      flyEl.getAnimations().forEach(a => a.cancel());
+    } catch (e) {}
+
     return flyEl;
   }
 
@@ -845,6 +859,9 @@ export class ScopaView {
       return;
     }
 
+    const emptyMsg = tableField.querySelector('.empty-table-msg');
+    if (emptyMsg) emptyMsg.style.display = 'none';
+
     // Measure exact destination slot where this card will sit in table-cards-field
     const dummy = document.createElement('div');
     dummy.className = 'card-wrapper table-card';
@@ -855,23 +872,33 @@ export class ScopaView {
 
     const destRect = dummy.getBoundingClientRect();
     dummy.remove();
+    if (emptyMsg) emptyMsg.style.display = '';
 
     const currentRect = playedFlyEl.getBoundingClientRect();
     const slideDx = destRect.left - currentRect.left;
     const slideDy = destRect.top - currentRect.top;
-    const finalRot = ((card.value * 5) % 7) - 3;
 
-    // Smooth gentle slide into the table cards row
+    const tableIdx = this.engine.tableCards.length;
+    const finalRot = ((card.value * 5 + tableIdx * 7) % 7) - 3;
+    const startRot = parseFloat(playedFlyEl.dataset.landingRot || 0);
+
+    // Smooth gentle slide from green space directly into the table cards row
     soundFx.playDeal();
     const slideAnim = playedFlyEl.animate([
-      { transform: playedFlyEl.style.transform || 'none' },
       { 
-        transform: `translate(${slideDx * 0.5}px, ${slideDy * 0.5 - 6}px) scale(1.02)`,
+        transform: `translate(0px, 0px) rotate(${startRot}deg) scale(1)`,
+        boxShadow: '0 16px 36px rgba(0, 0, 0, 0.7), 0 0 22px rgba(245, 197, 66, 0.5)'
+      },
+      { 
+        transform: `translate(${slideDx * 0.5}px, ${slideDy * 0.5 - 6}px) rotate(${startRot * 0.5 + finalRot * 0.5}deg) scale(1.02)`,
         offset: 0.5 
       },
-      { transform: `translate(${slideDx}px, ${slideDy}px) scale(1) rotate(${finalRot}deg)` }
+      { 
+        transform: `translate(${slideDx}px, ${slideDy}px) rotate(${finalRot}deg) scale(1)`,
+        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.45)'
+      }
     ], {
-      duration: 480,
+      duration: 500,
       easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
       fill: 'forwards'
     });
@@ -879,11 +906,7 @@ export class ScopaView {
     try {
       await slideAnim.finished;
     } catch (e) {
-      await new Promise(r => setTimeout(r, 480));
-    }
-
-    if (playedFlyEl && playedFlyEl.parentNode) {
-      playedFlyEl.remove();
+      await new Promise(r => setTimeout(r, 500));
     }
   }
 
