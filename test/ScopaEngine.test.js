@@ -71,3 +71,18 @@ test('deserialize non condivide riferimenti con l\'originale', () => {
 
   assert.equal(engine.tableCards.some(c => c.id === 'finto'), false);
 });
+
+test('serialize ritorna uno snapshot isolato, non riferimenti vivi', () => {
+  const engine = new ScopaEngine({ targetScore: 11 });
+  const snapshot = engine.serialize();
+  const originalMatchScore = snapshot.matchScore.player;
+  const originalTableLength = snapshot.tableCards.length;
+
+  // Mutate the live engine
+  engine.matchScore.player += 10;
+  engine.tableCards.push({ id: 'fake_card', suit: 'spade', value: 5 });
+
+  // Verify the snapshot is unchanged
+  assert.equal(snapshot.matchScore.player, originalMatchScore, 'matchScore should not have changed');
+  assert.equal(snapshot.tableCards.length, originalTableLength, 'tableCards length should not have changed');
+});

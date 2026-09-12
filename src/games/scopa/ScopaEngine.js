@@ -339,7 +339,7 @@ export class ScopaEngine {
 
   // Stato completo serializzabile: tutto ciò che serve a riprendere la partita
   serialize() {
-    return {
+    const data = {
       targetScore: this.targetScore,
       matchScore: this.matchScore,
       roundNumber: this.roundNumber,
@@ -359,6 +359,7 @@ export class ScopaEngine {
       isRoundOver: this.isRoundOver,
       roundScoreResult: this.roundScoreResult
     };
+    return JSON.parse(JSON.stringify(data));
   }
 
   // Ricostruisce senza passare dal costruttore, che distribuirebbe una nuova smazzata
