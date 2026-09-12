@@ -205,26 +205,36 @@ export class FriendsModal {
     container.innerHTML = `
       <div class="friends-list-wrap">
         <ul class="friends-card-list">
-          ${friends.map(friend => `
-            <li class="friend-card" data-friend-id="${friend.id}">
-              <div class="friend-card-avatar">
-                ${icons.user({ size: 20 })}
-              </div>
-              <div class="friend-card-info">
-                <span class="friend-username">${friend.username}</span>
-                <span class="friend-subtext">Amico</span>
-              </div>
-              <div class="friend-card-actions">
-                <button class="action-btn challenge-btn" data-action="challenge" data-friend-id="${friend.id}" data-friend-name="${friend.username}">
-                  ${icons.spade({ size: 15 })}
-                  <span>Sfida</span>
-                </button>
-                <button class="action-btn icon-btn remove-friend-btn" data-action="remove" data-friend-id="${friend.id}" title="Rimuovi amico">
-                  ${icons.trash({ size: 16 })}
-                </button>
-              </div>
-            </li>
-          `).join('')}
+          ${friends.map(friend => {
+            const isOnline = friendsManager.isUserOnline(friend.id);
+            return `
+              <li class="friend-card ${isOnline ? 'is-online' : 'is-offline'}" data-friend-id="${friend.id}">
+                <div class="friend-card-avatar">
+                  ${icons.user({ size: 20 })}
+                  <span class="presence-dot ${isOnline ? 'online' : 'offline'}" title="${isOnline ? 'Online' : 'Offline'}"></span>
+                </div>
+                <div class="friend-card-info">
+                  <span class="friend-username">${friend.username}</span>
+                  <span class="friend-subtext ${isOnline ? 'subtext-online' : 'subtext-offline'}">
+                    ${isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+                <div class="friend-card-actions">
+                  <button class="action-btn challenge-btn ${isOnline ? '' : 'disabled'}" 
+                          data-action="challenge" 
+                          data-friend-id="${friend.id}" 
+                          data-friend-name="${friend.username}"
+                          ${isOnline ? '' : 'disabled'}
+                          title="${isOnline ? 'Sfida a Scopa' : 'Questo amico è offline'}">
+                    <span>Sfida</span>
+                  </button>
+                  <button class="action-btn icon-btn remove-friend-btn" data-action="remove" data-friend-id="${friend.id}" title="Rimuovi amico">
+                    ${icons.trash({ size: 16 })}
+                  </button>
+                </div>
+              </li>
+            `;
+          }).join('')}
         </ul>
       </div>
     `;
@@ -232,6 +242,7 @@ export class FriendsModal {
     // Attach friend card actions
     container.querySelectorAll('button[data-action="challenge"]').forEach(btn => {
       btn.addEventListener('click', async () => {
+        if (btn.disabled) return;
         const friendId = btn.getAttribute('data-friend-id');
         const friendName = btn.getAttribute('data-friend-name');
         soundFx.playSnap();
@@ -242,13 +253,13 @@ export class FriendsModal {
           const invite = await friendsManager.sendGameInvite(friendId, 'scopa');
           soundFx.playWin();
           btn.disabled = false;
-          btn.innerHTML = `${icons.spade({ size: 15 })} <span>Sfida</span>`;
+          btn.innerHTML = '<span>Sfida</span>';
           this.showWaitingChallengeModal(invite, friendName);
         } catch (err) {
           soundFx.playSnap();
           alert(err.message || 'Errore durante l\'invio della sfida.');
           btn.disabled = false;
-          btn.innerHTML = `${icons.spade({ size: 15 })} <span>Sfida</span>`;
+          btn.innerHTML = '<span>Sfida</span>';
         }
       });
     });

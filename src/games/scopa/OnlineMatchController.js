@@ -3,7 +3,7 @@
 
 import { supabase } from '../../core/supabaseClient.js';
 
-const POLL_MS = 3000;
+const POLL_MS = 6000;
 
 export class OnlineMatchController {
   constructor({ sessionId }) {
@@ -12,6 +12,7 @@ export class OnlineMatchController {
     this.view = null;
     this.channel = null;
     this.pollInterval = null;
+    this.deadlineInterval = null;
     this.timeoutClaimed = false;
     this.connected = true;
   }
@@ -76,7 +77,15 @@ export class OnlineMatchController {
           table: 'game_sessions',
           filter: `id=eq.${this.sessionId}`
         },
-        () => this.call('state')
+        (payload) => {
+          // Se la versione salvata sul database è già quella che abbiamo in memoria
+          // (perché siamo noi ad aver fatto la mossa ed aver ricevuto la risposta HTTP),
+          // non dobbiamo fare una seconda chiamata 'state' ridondante.
+          if (payload?.new && this.view?.version && payload.new.version <= this.view.version) {
+            return;
+          }
+          this.call('state');
+        }
       )
       .subscribe((status) => {
         this.connected = status === 'SUBSCRIBED';
@@ -91,9 +100,14 @@ export class OnlineMatchController {
   // è la rete di sicurezza, e serve anche a far scattare i turni scaduti.
   startPolling() {
     this.stopPolling();
+    // Controllo client-side scadenze ogni 1000ms: zero traffico di rete finché non scade davvero
+    this.deadlineInterval = setInterval(() => {
+      this.checkDeadline();
+    }, 1000);
+
+    // Heartbeat di riserva per pacchetti persi o riconnessioni
     this.pollInterval = setInterval(() => {
       this.call('state');
-      this.checkDeadline();
     }, POLL_MS);
   }
 
@@ -101,6 +115,10 @@ export class OnlineMatchController {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
+    }
+    if (this.deadlineInterval) {
+      clearInterval(this.deadlineInterval);
+      this.deadlineInterval = null;
     }
   }
 

@@ -3568,11 +3568,55 @@ dialog[open]::backdrop {
   background: linear-gradient(135deg, #f5c542, #d49f1b);
   color: #12281b;
   box-shadow: 0 2px 8px rgba(245, 197, 66, 0.35);
+  font-weight: 700;
 }
 
 .action-btn.challenge-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(245, 197, 66, 0.5);
+}
+
+.action-btn.challenge-btn.disabled,
+.action-btn.challenge-btn:disabled {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #718093 !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  opacity: 0.6;
+}
+
+.friend-card-avatar {
+  position: relative;
+}
+
+.presence-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid #0d2616;
+}
+
+.presence-dot.online {
+  background: #2ed573;
+  box-shadow: 0 0 6px #2ed573;
+}
+
+.presence-dot.offline {
+  background: #747d8c;
+}
+
+.subtext-online {
+  color: #2ed573 !important;
+  font-weight: 600;
+}
+
+.subtext-offline {
+  color: #747d8c !important;
 }
 
 .action-btn.send-req-btn {

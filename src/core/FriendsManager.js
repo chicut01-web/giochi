@@ -10,6 +10,8 @@ class FriendsManager {
     this.listeners = new Set();
     this.pollInterval = null;
     this.realtimeChannel = null;
+    this.presenceChannel = null;
+    this.onlineUserIds = new Set();
     this.cachedFriends = [];
     this.cachedIncomingRequests = [];
     this.cachedOutgoingRequests = [];
@@ -33,16 +35,20 @@ class FriendsManager {
     this.cachedIncomingRequests = [];
     this.cachedOutgoingRequests = [];
     this.cachedIncomingInvites = [];
+    this.onlineUserIds.clear();
     this.notifyListeners();
   }
 
   startSync() {
     this.refreshAll();
     this.setupRealtime();
+    this.setupPresence();
     if (!this.pollInterval) {
       this.pollInterval = setInterval(() => {
+        // Se il giocatore è impegnato in partita a Scopa, non sovraccaricare il database
+        if (gameManager.getView() === 'scopa') return;
         this.refreshAll();
-      }, 5000);
+      }, 7000);
     }
   }
 
@@ -55,7 +61,64 @@ class FriendsManager {
       supabase.removeChannel(this.realtimeChannel);
       this.realtimeChannel = null;
     }
+    if (this.presenceChannel) {
+      supabase.removeChannel(this.presenceChannel);
+      this.presenceChannel = null;
+    }
+    this.onlineUserIds.clear();
     this.stopWaitingForChallenge();
+  }
+
+  setupPresence() {
+    const user = authManager.getUser();
+    if (!user) return;
+
+    if (this.presenceChannel) {
+      supabase.removeChannel(this.presenceChannel);
+      this.presenceChannel = null;
+    }
+
+    this.presenceChannel = supabase.channel('piuccia_online_players', {
+      config: {
+        presence: { key: user.id }
+      }
+    });
+
+    const updatePresenceState = () => {
+      if (!this.presenceChannel) return;
+      const state = this.presenceChannel.presenceState();
+      this.onlineUserIds = new Set(Object.keys(state));
+      this.notifyListeners();
+    };
+
+    this.presenceChannel
+      .on('presence', { event: 'sync' }, updatePresenceState)
+      .on('presence', { event: 'join' }, ({ key }) => {
+        this.onlineUserIds.add(key);
+        this.notifyListeners();
+      })
+      .on('presence', { event: 'leave' }, ({ key }) => {
+        this.onlineUserIds.delete(key);
+        this.notifyListeners();
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          try {
+            await this.presenceChannel.track({
+              user_id: user.id,
+              username: authManager.getNickname() || 'Giocatore',
+              online_at: new Date().toISOString()
+            });
+          } catch (err) {
+            console.warn('[FriendsManager] Errore tracking presence:', err);
+          }
+        }
+      });
+  }
+
+  isUserOnline(userId) {
+    if (!userId) return false;
+    return this.onlineUserIds.has(userId);
   }
 
   setupRealtime() {
@@ -502,6 +565,10 @@ class FriendsManager {
   async sendGameInvite(friendUserId, gameType = 'scopa') {
     const user = authManager.getUser();
     if (!user) throw new Error('Non connesso.');
+
+    if (!this.isUserOnline(friendUserId)) {
+      throw new Error('Questo amico non è attualmente online. Può ricevere sfide solo quando è connesso all\'app.');
+    }
 
     const { data, error } = await supabase
       .from('game_invites')

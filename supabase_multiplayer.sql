@@ -23,6 +23,19 @@ CREATE TABLE IF NOT EXISTS public.game_sessions (
 CREATE INDEX IF NOT EXISTS game_sessions_players_idx
 ON public.game_sessions (player_a, player_b, status);
 
+-- Indici ad alte prestazioni per query istantanee
+CREATE INDEX IF NOT EXISTS game_invites_to_user_status_idx 
+ON public.game_invites (to_user_id, status);
+
+CREATE INDEX IF NOT EXISTS game_invites_from_user_status_idx 
+ON public.game_invites (from_user_id, status);
+
+CREATE INDEX IF NOT EXISTS friendships_user_friend_idx 
+ON public.friendships (user_id, friend_id);
+
+CREATE INDEX IF NOT EXISTS friend_requests_receiver_status_idx 
+ON public.friend_requests (receiver_id, status);
+
 -- Mano di un giocatore: ognuno legge solo la propria riga
 CREATE TABLE IF NOT EXISTS public.game_session_hands (
     session_id UUID NOT NULL REFERENCES public.game_sessions(id) ON DELETE CASCADE,
