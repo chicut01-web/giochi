@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS public.game_session_hands (
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     seat SMALLINT NOT NULL CHECK (seat IN (1, 2)),
     hand JSONB NOT NULL DEFAULT '[]'::jsonb,
-    PRIMARY KEY (session_id, user_id)
+    PRIMARY KEY (session_id, user_id),
+    CONSTRAINT unique_session_seat UNIQUE (session_id, seat)
 );
 
 -- Stato completo del motore: nessuno può leggerlo tranne il service role
@@ -66,7 +67,19 @@ USING (auth.uid() = user_id);
 -- policy, nessun ruolo applicativo può leggerla.
 
 -- Realtime sullo stato pubblico
-ALTER PUBLICATION supabase_realtime ADD TABLE public.game_sessions;
+-- Guarda l'aggiunta alla publication per evitare errori di idempotenza:
+-- ALTER PUBLICATION non ha IF NOT EXISTS, quindi il secondo invio fallirebbe
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'public'
+          AND tablename = 'game_sessions'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.game_sessions;
+    END IF;
+END $$;
 
 -- ------------------------------------------------------------------
 -- Scrittura atomica di una mossa
@@ -118,6 +131,13 @@ BEGIN
 END;
 $$;
 
+-- Revoca il grant automatico su PUBLIC e consenti solo al service role
+-- (che esegue da Edge Function). L'RPC non ha autorizzazione interna:
+-- le verifiche di autorità stanno nell'Edge Function.
 REVOKE EXECUTE ON FUNCTION public.apply_scopa_move(
     UUID, INT, JSONB, JSONB, SMALLINT, TIMESTAMPTZ, TEXT, SMALLINT, JSONB, JSONB
-) FROM anon, authenticated;
+) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.apply_scopa_move(
+    UUID, INT, JSONB, JSONB, SMALLINT, TIMESTAMPTZ, TEXT, SMALLINT, JSONB, JSONB
+) TO service_role;
