@@ -4,6 +4,7 @@ import { authManager } from '../core/AuthManager.js';
 import { gameManager } from '../core/GameManager.js';
 import { soundFx } from '../core/SoundFx.js';
 import { validatePassword, validateUsername } from '../utils/validators.js';
+import { icons } from '../utils/icons.js';
 
 export class AuthView {
   constructor(container) {
@@ -49,7 +50,7 @@ export class AuthView {
               <div class="auth-field-group">
                 <label for="view-reg-nickname">Nome Giocatore / Nickname</label>
                 <div class="auth-field-input-box">
-                  <span class="auth-field-icon">👤</span>
+                  <span class="auth-field-icon">${icons.user({ size: 18 })}</span>
                   <input type="text" id="view-reg-nickname" name="nickname" placeholder="es. Piuccia, Mario..." required autocomplete="nickname" maxlength="20" />
                 </div>
                 <div class="field-feedback" id="view-reg-nick-feedback"></div>
@@ -58,7 +59,7 @@ export class AuthView {
               <div class="auth-field-group">
                 <label for="view-reg-email">Indirizzo Email</label>
                 <div class="auth-field-input-box">
-                  <span class="auth-field-icon">✉️</span>
+                  <span class="auth-field-icon">${icons.mail({ size: 18 })}</span>
                   <input type="email" id="view-reg-email" name="email" placeholder="nome@esempio.it" required autocomplete="email" />
                 </div>
               </div>
@@ -66,24 +67,24 @@ export class AuthView {
               <div class="auth-field-group">
                 <label for="view-reg-password">Password (almeno 8 caratteri)</label>
                 <div class="auth-field-input-box">
-                  <span class="auth-field-icon">🔒</span>
+                  <span class="auth-field-icon">${icons.lock({ size: 18 })}</span>
                   <input type="password" id="view-reg-password" name="password" placeholder="Crea una password sicura" minlength="8" required autocomplete="new-password" />
                 </div>
 
                 <!-- Live Password Complexity Checklist -->
                 <div class="pw-checklist" id="view-reg-pw-checklist">
-                  <div class="pw-check-item" id="chk-len"><span class="pw-icon">✕</span> Minimo 8 caratteri</div>
-                  <div class="pw-check-item" id="chk-lower"><span class="pw-icon">✕</span> Lettera minuscola (a-z)</div>
-                  <div class="pw-check-item" id="chk-upper"><span class="pw-icon">✕</span> Lettera maiuscola (A-Z)</div>
-                  <div class="pw-check-item" id="chk-num"><span class="pw-icon">✕</span> Almeno un numero (0-9)</div>
-                  <div class="pw-check-item" id="chk-spec"><span class="pw-icon">✕</span> Simbolo speciale (!?#@...)</div>
+                  <div class="pw-check-item" id="chk-len"><span class="pw-icon">${icons.close({ size: 12 })}</span> Minimo 8 caratteri</div>
+                  <div class="pw-check-item" id="chk-lower"><span class="pw-icon">${icons.close({ size: 12 })}</span> Lettera minuscola (a-z)</div>
+                  <div class="pw-check-item" id="chk-upper"><span class="pw-icon">${icons.close({ size: 12 })}</span> Lettera maiuscola (A-Z)</div>
+                  <div class="pw-check-item" id="chk-num"><span class="pw-icon">${icons.close({ size: 12 })}</span> Almeno un numero (0-9)</div>
+                  <div class="pw-check-item" id="chk-spec"><span class="pw-icon">${icons.close({ size: 12 })}</span> Simbolo speciale (!?#@...)</div>
                 </div>
               </div>
 
               <div class="auth-field-group">
                 <label for="view-reg-confirm">Conferma Password</label>
                 <div class="auth-field-input-box">
-                  <span class="auth-field-icon">🔐</span>
+                  <span class="auth-field-icon">${icons.lock({ size: 18 })}</span>
                   <input type="password" id="view-reg-confirm" name="confirmPassword" placeholder="Ripeti la password" minlength="8" required autocomplete="new-password" />
                 </div>
               </div>
@@ -101,7 +102,7 @@ export class AuthView {
               <div class="auth-field-group">
                 <label for="view-log-email">Indirizzo Email</label>
                 <div class="auth-field-input-box">
-                  <span class="auth-field-icon">✉️</span>
+                  <span class="auth-field-icon">${icons.mail({ size: 18 })}</span>
                   <input type="email" id="view-log-email" name="email" placeholder="nome@esempio.it" required autocomplete="email" />
                 </div>
               </div>
@@ -109,7 +110,7 @@ export class AuthView {
               <div class="auth-field-group">
                 <label for="view-log-password">Password</label>
                 <div class="auth-field-input-box">
-                  <span class="auth-field-icon">🔒</span>
+                  <span class="auth-field-icon">${icons.lock({ size: 18 })}</span>
                   <input type="password" id="view-log-password" name="password" placeholder="La tua password" required autocomplete="current-password" />
                 </div>
               </div>
@@ -216,10 +217,10 @@ export class AuthView {
       if (!el) return;
       if (isValid) {
         el.className = 'pw-check-item valid';
-        el.innerHTML = `<span class="pw-icon">✓</span> ${text}`;
+        el.innerHTML = `<span class="pw-icon">${icons.check({ size: 12 })}</span> ${text}`;
       } else {
         el.className = 'pw-check-item';
-        el.innerHTML = `<span class="pw-icon">✕</span> ${text}`;
+        el.innerHTML = `<span class="pw-icon">${icons.close({ size: 12 })}</span> ${text}`;
       }
     };
 

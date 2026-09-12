@@ -6,6 +6,7 @@ import { soundFx } from '../../core/SoundFx.js';
 import { gameManager } from '../../core/GameManager.js';
 import { authManager } from '../../core/AuthManager.js';
 import { authModal } from '../../components/AuthModal.js';
+import { icons } from '../../utils/icons.js';
 
 export class ScopaView {
   constructor(container) {
@@ -210,8 +211,11 @@ export class ScopaView {
     dialog.className = 'app-dialog';
     dialog.innerHTML = `
       <div class="dialog-content">
+        <div class="dialog-icon-header ${isWinner ? 'icon-winner' : 'icon-loser'}">
+          ${isWinner ? icons.crown({ size: 48, color: '#f5c542' }) : icons.abandon({ size: 48, color: '#ff6b6b' })}
+        </div>
         <h2 class="dialog-title ${isWinner ? 'winner-title' : 'loser-title'}">
-          ${isWinner ? '🏆 Vittoria a Tavolino!' : 'Partita Terminata'}
+          ${isWinner ? 'Vittoria a Tavolino!' : 'Partita Terminata'}
         </h2>
         <p class="dialog-desc">
           ${isWinner 
@@ -219,7 +223,10 @@ export class ScopaView {
             : 'Hai abbandonato la partita.'}
         </p>
         <div class="modal-actions">
-          <button class="primary-btn" id="abandon-back-lobby-btn">Torna alla Lobby</button>
+          <button class="primary-btn" id="abandon-back-lobby-btn">
+            ${icons.arrowLeft({ size: 18 })}
+            <span>Torna alla Lobby</span>
+          </button>
         </div>
       </div>
     `;
@@ -240,48 +247,55 @@ export class ScopaView {
       <div class="scopa-arena" id="scopa-arena">
         <!-- Top Navigation, Score Bar, and Turn Timer -->
         <header class="scopa-header">
-          <button class="scopa-btn icon-btn" id="scopa-back-btn" title="Torna alla Lobby">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-            <span class="btn-text">Lobby</span>
-          </button>
+          <div class="header-left">
+            <button class="scopa-btn icon-btn" id="scopa-back-btn" title="Torna alla Lobby">
+              ${icons.arrowLeft({ size: 18 })}
+              <span class="btn-text">Lobby</span>
+            </button>
+            <button class="scopa-btn scopa-btn-danger abandon-match-btn hidden" id="abandon-match-btn" title="Abbandona la partita">
+              ${icons.abandon({ size: 16, className: 'btn-icon' })}
+              <span class="btn-text">Abbandona</span>
+            </button>
+          </div>
 
-          <div class="scoreboard-pill">
-            <div class="score-team player-team">
-              <span class="team-label" id="player-label">Tu</span>
-              <span class="team-score" id="score-player">0</span>
+          <div class="header-center">
+            <div class="scoreboard-pill">
+              <div class="score-team player-team">
+                <span class="team-label" id="player-label">Tu</span>
+                <span class="team-score" id="score-player">0</span>
+              </div>
+              <div class="score-divider">
+                <span class="target-badge" id="target-badge"><span class="target-label">Obiettivo: </span>${target} pt</span>
+              </div>
+              <div class="score-team cpu-team">
+                <span class="team-score" id="score-cpu">0</span>
+                <span class="team-label" id="cpu-label">CPU</span>
+              </div>
             </div>
-            <div class="score-divider">
-              <span class="target-badge" id="target-badge"><span class="target-label">Obiettivo: </span>${target} pt</span>
-            </div>
-            <div class="score-team cpu-team">
-              <span class="team-score" id="score-cpu">0</span>
-              <span class="team-label" id="cpu-label">CPU</span>
+
+            <!-- 10/25-Second Turn Timer Pill -->
+            <div class="turn-timer-pill" id="turn-timer-pill" title="Tempo rimanente per la giocata">
+              <div class="timer-circle-wrap">
+                <svg viewBox="0 0 36 36" class="timer-svg">
+                  <path class="timer-track" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  <path class="timer-fill" id="timer-fill" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                </svg>
+                <span class="timer-seconds" id="timer-seconds">10</span>
+              </div>
+              <div class="timer-info">
+                <span class="timer-role" id="timer-role">Turno Tuo</span>
+                <span class="timer-sub" id="timer-sub-seconds">10s max</span>
+              </div>
             </div>
           </div>
 
-          <!-- 10/25-Second Turn Timer Pill -->
-          <div class="turn-timer-pill" id="turn-timer-pill" title="Tempo rimanente per la giocata">
-            <div class="timer-circle-wrap">
-              <svg viewBox="0 0 36 36" class="timer-svg">
-                <path class="timer-track" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                <path class="timer-fill" id="timer-fill" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-              </svg>
-              <span class="timer-seconds" id="timer-seconds">10</span>
-            </div>
-            <div class="timer-info">
-              <span class="timer-role" id="timer-role">Turno Tuo</span>
-              <span class="timer-sub" id="timer-sub-seconds">10s max</span>
-            </div>
-          </div>
-
-          <div class="header-actions">
-            <button class="abandon-match-btn hidden" id="abandon-match-btn" title="Abbandona la partita">Abbandona</button>
+          <div class="header-actions header-right">
             <span class="reconnect-notice hidden" id="reconnect-notice">Riconnessione…</span>
             <button class="scopa-btn icon-btn" id="scopa-sound-btn" title="Attiva/Disattiva Audio">
-              <span id="sound-icon">${soundFx.isMuted() ? '🔇' : '🔊'}</span>
+              <span id="sound-icon">${soundFx.isMuted() ? icons.volumeX({ size: 18 }) : icons.volume2({ size: 18 })}</span>
             </button>
             <button class="scopa-btn icon-btn" id="scopa-rules-btn" title="Regole della Scopa">
-              <span class="btn-icon">📖</span>
+              ${icons.bookOpen({ size: 18 })}
               <span class="btn-text">Regole</span>
             </button>
           </div>
@@ -292,7 +306,7 @@ export class ScopaView {
           <!-- Opponent Zone (CPU or Friend) -->
           <div class="player-zone cpu-zone">
             <div class="avatar-badge">
-              <div class="avatar-icon cpu-avatar" id="opponent-avatar-icon">🤖</div>
+              <div class="avatar-icon cpu-avatar" id="opponent-avatar-icon">${icons.bot({ size: 20 })}</div>
               <div class="avatar-info">
                 <span class="avatar-name" id="opponent-name">CPU Master</span>
                 <span class="avatar-sub" id="cpu-scope-count">Scope: 0</span>
@@ -337,7 +351,7 @@ export class ScopaView {
             <!-- Action Narrator Banner & Turn Box -->
             <div class="table-info-box">
               <div class="action-narrator" id="action-narrator">
-                <span class="narrator-icon" id="narrator-icon">🎯</span>
+                <span class="narrator-icon" id="narrator-icon">${icons.target({ size: 16 })}</span>
                 <span class="narrator-text" id="narrator-text">È il tuo turno: seleziona una carta</span>
               </div>
             </div>
@@ -346,7 +360,7 @@ export class ScopaView {
           <!-- Player Zone -->
           <div class="player-zone user-zone">
             <div class="avatar-badge">
-              <div class="avatar-icon user-avatar">👤</div>
+              <div class="avatar-icon user-avatar">${icons.user({ size: 20 })}</div>
               <div class="avatar-info">
                 <span class="avatar-name" id="player-name">${authManager.getNickname() || 'Tu'}</span>
                 <span class="avatar-sub" id="player-scope-count">Scope: 0</span>
@@ -368,7 +382,8 @@ export class ScopaView {
           <!-- Scopa Celebration Splash Banner -->
           <div class="scopa-banner" id="scopa-banner">
             <div class="scopa-banner-glow"></div>
-            <div class="scopa-banner-text">✨ SCOPA! ✨</div>
+            <div class="scopa-banner-sparkle">${icons.sparkles({ size: 36, color: '#f5c542' })}</div>
+            <div class="scopa-banner-text">SCOPA!</div>
             <div class="scopa-banner-sub">+1 PUNTO</div>
           </div>
         </main>
@@ -376,7 +391,10 @@ export class ScopaView {
         <!-- Modal Dialog: Capture Choice Selector -->
         <dialog class="app-dialog" id="capture-choice-dialog">
           <div class="dialog-content">
-            <h3 class="dialog-title">Scegli la Presa</h3>
+            <div class="dialog-header-row">
+              <h3 class="dialog-title">Scegli la Presa</h3>
+              <button class="dialog-close-icon-btn" id="cancel-capture-choice-icon-btn" title="Chiudi">${icons.close({ size: 20 })}</button>
+            </div>
             <p class="dialog-desc">Hai più combinazioni possibili di somma per questa carta. Scegli quali carte raccogliere:</p>
             <div class="capture-options-grid" id="capture-options-grid"></div>
             <button class="dialog-cancel-btn" id="cancel-capture-choice-btn">Annulla Mossa</button>
@@ -386,7 +404,12 @@ export class ScopaView {
         <!-- Modal Dialog: Round Score Recap -->
         <dialog class="app-dialog round-modal" id="round-score-dialog">
           <div class="dialog-content">
-            <h2 class="dialog-title" id="round-modal-title">Fine Smazzata</h2>
+            <div class="dialog-header-row">
+              <div class="dialog-title-with-icon">
+                ${icons.trophy({ size: 24, className: 'dialog-title-svg' })}
+                <h2 class="dialog-title" id="round-modal-title">Fine Smazzata</h2>
+              </div>
+            </div>
             <div class="round-scores-table" id="round-scores-table"></div>
             <div class="modal-actions">
               <button class="primary-btn" id="next-round-btn">Continua la Partita</button>
@@ -397,7 +420,13 @@ export class ScopaView {
         <!-- Modal Dialog: Rules Guide -->
         <dialog class="app-dialog rules-dialog" id="scopa-rules-dialog">
           <div class="dialog-content">
-            <h2 class="dialog-title">Regole della Scopa</h2>
+            <div class="dialog-header-row">
+              <div class="dialog-title-with-icon">
+                ${icons.bookOpen({ size: 24, className: 'dialog-title-svg' })}
+                <h2 class="dialog-title">Regole della Scopa</h2>
+              </div>
+              <button class="dialog-close-icon-btn" id="close-rules-icon-btn" title="Chiudi">${icons.close({ size: 20 })}</button>
+            </div>
             <div class="rules-body">
               <section>
                 <h4>Obiettivo & Tempo di Turno</h4>
@@ -461,20 +490,28 @@ export class ScopaView {
     soundBtn?.addEventListener('click', () => {
       const isMuted = soundFx.toggleMute();
       const soundIcon = document.getElementById('sound-icon');
-      if (soundIcon) soundIcon.textContent = isMuted ? '🔇' : '🔊';
+      if (soundIcon) soundIcon.innerHTML = isMuted ? icons.volumeX({ size: 18 }) : icons.volume2({ size: 18 });
     });
 
     // Rules Dialog
     const rulesBtn = document.getElementById('scopa-rules-btn');
     const rulesDialog = document.getElementById('scopa-rules-dialog');
     const closeRulesBtn = document.getElementById('close-rules-btn');
+    const closeRulesIconBtn = document.getElementById('close-rules-icon-btn');
     rulesBtn?.addEventListener('click', () => {
       this.pauseTimer();
       rulesDialog?.showModal();
     });
-    closeRulesBtn?.addEventListener('click', () => {
+    const handleCloseRules = () => {
       rulesDialog?.close();
       this.resumeTimer();
+    };
+    closeRulesBtn?.addEventListener('click', handleCloseRules);
+    closeRulesIconBtn?.addEventListener('click', handleCloseRules);
+
+    // Cancel Capture Choice (modal close icon)
+    document.getElementById('cancel-capture-choice-icon-btn')?.addEventListener('click', () => {
+      document.getElementById('cancel-capture-choice-btn')?.click();
     });
 
     // Next Round Button
@@ -612,9 +649,10 @@ export class ScopaView {
     }
 
     const oppIcon = document.getElementById('opponent-avatar-icon');
-    const newIcon = this.view.mode === 'local' ? '🤖' : '👤';
-    if (oppIcon && oppIcon.textContent !== newIcon) {
-      oppIcon.textContent = newIcon;
+    const newIconMode = this.view.mode === 'local' ? 'bot' : 'user';
+    if (oppIcon && oppIcon.dataset.iconMode !== newIconMode) {
+      oppIcon.innerHTML = newIconMode === 'bot' ? icons.bot({ size: 20 }) : icons.user({ size: 20 });
+      oppIcon.dataset.iconMode = newIconMode;
     }
 
     const oppLabel = document.getElementById('cpu-label');
@@ -819,10 +857,24 @@ export class ScopaView {
     });
   }
 
-  setNarrator(icon, text) {
+  setNarrator(iconOrSvg, text) {
     const iconEl = document.getElementById('narrator-icon');
     const textEl = document.getElementById('narrator-text');
-    if (iconEl) iconEl.textContent = icon;
+    if (iconEl) {
+      if (typeof iconOrSvg === 'string' && iconOrSvg.startsWith('<svg')) {
+        iconEl.innerHTML = iconOrSvg;
+      } else if (iconOrSvg === '⏳') {
+        iconEl.innerHTML = icons.clock({ size: 16 });
+      } else if (iconOrSvg === '🎯') {
+        iconEl.innerHTML = icons.target({ size: 16 });
+      } else if (iconOrSvg === '✨') {
+        iconEl.innerHTML = icons.sparkles({ size: 16 });
+      } else if (iconOrSvg === '⚠️') {
+        iconEl.innerHTML = icons.flag({ size: 16 });
+      } else {
+        iconEl.innerHTML = iconOrSvg || icons.target({ size: 16 });
+      }
+    }
     if (textEl) textEl.textContent = text;
   }
 

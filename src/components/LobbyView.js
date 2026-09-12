@@ -5,6 +5,7 @@ import { authManager } from '../core/AuthManager.js';
 import { authModal } from './AuthModal.js';
 import { friendsModal } from './FriendsModal.js';
 import { friendsManager } from '../core/FriendsManager.js';
+import { icons } from '../utils/icons.js';
 
 export class LobbyView {
   constructor(container) {
@@ -46,35 +47,39 @@ export class LobbyView {
           <div class="lobby-header-actions">
             ${isAuthenticated ? `
               <div class="user-profile-badge" id="lobby-user-badge" title="Giocatore Connesso: ${authManager.getUserEmail()}">
-                <span class="user-avatar-icon">👤</span>
+                <span class="user-avatar-icon">${icons.user({ size: 16 })}</span>
                 <span class="user-nickname">${nickname}</span>
               </div>
               <button class="nav-btn friends-nav-btn" id="lobby-friends-btn" title="Circolo Amici & Sfide">
-                <span class="friends-btn-icon">👥</span>
+                <span class="friends-btn-icon">${icons.users({ size: 16 })}</span>
                 <span>Amici</span>
                 <span class="friends-pulse-badge hidden" id="lobby-friends-badge">0</span>
               </button>
               <button class="nav-btn auth-nav-btn logout-btn" id="lobby-logout-btn" title="Disconnettiti">
-                <span>🚪 Esci</span>
+                ${icons.logOut({ size: 16 })}
+                <span>Esci</span>
               </button>
             ` : `
               <button class="nav-btn auth-nav-btn login-btn" id="lobby-login-btn" title="Accedi o registrati">
-                <span>🔑 Accedi</span>
+                ${icons.key({ size: 16 })}
+                <span>Accedi</span>
               </button>
             `}
             <button class="nav-btn install-app-btn ${isStandalone ? 'hidden' : ''}" id="lobby-install-btn" title="Installa l'applicazione sulla schermata Home">
               <span class="install-pulse-dot"></span>
-              <span class="install-btn-icon">📲</span>
+              <span class="install-btn-icon">${icons.smartphone({ size: 16 })}</span>
               <span class="install-btn-label">Installa App</span>
             </button>
             <button class="nav-btn" id="lobby-stats-btn" title="Statistiche">
-              <span>📊 Statistiche</span>
+              ${icons.chart({ size: 16 })}
+              <span>Statistiche</span>
             </button>
             <button class="nav-btn" id="lobby-rules-btn" title="Come si gioca">
-              <span>📖 Guida</span>
+              ${icons.bookOpen({ size: 16 })}
+              <span>Guida</span>
             </button>
             <button class="nav-btn icon-only" id="lobby-sound-btn" title="Audio">
-              <span id="lobby-sound-icon">${soundFx.isMuted() ? '🔇' : '🔊'}</span>
+              <span id="lobby-sound-icon">${soundFx.isMuted() ? icons.volumeX({ size: 18 }) : icons.volume2({ size: 18 })}</span>
             </button>
           </div>
         </header>
@@ -87,19 +92,19 @@ export class LobbyView {
         <main class="lobby-content">
           <div class="section-heading">
             <h2 class="section-title">Scegli il tuo Gioco</h2>
-            <p class="section-desc">Seleziona una sala e sfida l'Intelligenza Artificiale.</p>
+            <p class="section-desc">Seleziona una sala e sfida l'Intelligenza Artificiale o un amico.</p>
           </div>
 
           <div class="games-grid">
             <!-- GAME 1: SCOPA (ACTIVE) -->
             <article class="game-card active-game" id="card-scopa">
-              <div class="card-status-pill status-ready">🟢 Disponibile Ora</div>
+              <div class="card-status-pill status-ready">Disponibile Ora</div>
               
               <div class="game-card-banner banner-scopa">
                 <div class="card-art-illustration">
-                  <span class="scopa-pip pip-denari">🪙 7</span>
-                  <span class="scopa-pip pip-coppe">🍷 1</span>
-                  <span class="scopa-pip pip-spade">⚔️ R</span>
+                  <span class="scopa-pip pip-denari">${icons.denari({ size: 15 })} 7 Bello</span>
+                  <span class="scopa-pip pip-coppe">${icons.coppe({ size: 15 })} Asso</span>
+                  <span class="scopa-pip pip-spade">${icons.spade({ size: 15 })} Re</span>
                 </div>
                 <div class="scopa-card-title-box">
                   <h3 class="game-title">Scopa</h3>
@@ -124,7 +129,7 @@ export class LobbyView {
 
                 <div class="card-footer">
                   <button class="play-btn primary-btn" id="start-scopa-btn">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    ${icons.play({ size: 20 })}
                     <span>Gioca Ora a Scopa</span>
                   </button>
                 </div>
@@ -133,11 +138,11 @@ export class LobbyView {
 
             <!-- GAME 2: BRISCOLA (UPCOMING) -->
             <article class="game-card upcoming-game">
-              <div class="card-status-pill status-upcoming">⏳ Prossimamente</div>
+              <div class="card-status-pill status-upcoming">Prossimamente</div>
               <div class="game-card-banner banner-briscola">
                 <div class="card-art-illustration">
-                  <span class="scopa-pip">⚔️ Asso</span>
-                  <span class="scopa-pip">🏆 Tre</span>
+                  <span class="scopa-pip pip-spade">${icons.spade({ size: 15 })} Asso</span>
+                  <span class="scopa-pip pip-bastoni">${icons.bastoni({ size: 15 })} Tre</span>
                 </div>
                 <div class="scopa-card-title-box">
                   <h3 class="game-title">Briscola</h3>
@@ -156,11 +161,11 @@ export class LobbyView {
 
             <!-- GAME 3: TRESETTE (UPCOMING) -->
             <article class="game-card upcoming-game">
-              <div class="card-status-pill status-upcoming">⏳ Prossimamente</div>
+              <div class="card-status-pill status-upcoming">Prossimamente</div>
               <div class="game-card-banner banner-tresette">
                 <div class="card-art-illustration">
-                  <span class="scopa-pip">🪵 3</span>
-                  <span class="scopa-pip">🍷 2</span>
+                  <span class="scopa-pip pip-bastoni">${icons.bastoni({ size: 15 })} 3</span>
+                  <span class="scopa-pip pip-coppe">${icons.coppe({ size: 15 })} 2</span>
                 </div>
                 <div class="scopa-card-title-box">
                   <h3 class="game-title">Tresette</h3>
@@ -179,10 +184,10 @@ export class LobbyView {
 
             <!-- GAME 4: SETTE E MEZZO (UPCOMING) -->
             <article class="game-card upcoming-game">
-              <div class="card-status-pill status-upcoming">⏳ Prossimamente</div>
+              <div class="card-status-pill status-upcoming">Prossimamente</div>
               <div class="game-card-banner banner-settemezzo">
                 <div class="card-art-illustration">
-                  <span class="scopa-pip">🪙 Re Bello</span>
+                  <span class="scopa-pip pip-denari">${icons.denari({ size: 15 })} Re Matta</span>
                   <span class="scopa-pip">½</span>
                 </div>
                 <div class="scopa-card-title-box">
@@ -205,7 +210,13 @@ export class LobbyView {
         <!-- Stats Dialog -->
         <dialog class="app-dialog" id="lobby-stats-dialog">
           <div class="dialog-content">
-            <h2 class="dialog-title">Statistiche Giocatore</h2>
+            <div class="dialog-header-row">
+              <div class="dialog-title-with-icon">
+                ${icons.chart({ size: 24, className: 'dialog-title-svg' })}
+                <h2 class="dialog-title">Statistiche Giocatore</h2>
+              </div>
+              <button class="dialog-close-icon-btn" id="close-stats-icon-btn" title="Chiudi">${icons.close({ size: 20 })}</button>
+            </div>
             <div class="stats-grid">
               <div class="stat-card">
                 <span class="stat-num">${stats.matchesPlayed}</span>
@@ -235,7 +246,13 @@ export class LobbyView {
         <!-- Rules Dialog -->
         <dialog class="app-dialog rules-dialog" id="lobby-rules-dialog">
           <div class="dialog-content">
-            <h2 class="dialog-title">Regole Ufficiali della Scopa</h2>
+            <div class="dialog-header-row">
+              <div class="dialog-title-with-icon">
+                ${icons.bookOpen({ size: 24, className: 'dialog-title-svg' })}
+                <h2 class="dialog-title">Regole Ufficiali della Scopa</h2>
+              </div>
+              <button class="dialog-close-icon-btn" id="close-lobby-rules-icon-btn" title="Chiudi">${icons.close({ size: 20 })}</button>
+            </div>
             <div class="rules-body">
               <section>
                 <h4>Obiettivo del Gioco</h4>
@@ -346,7 +363,7 @@ export class LobbyView {
           challengesBox.innerHTML = state.incomingInvites.map(inv => `
             <div class="lobby-challenge-card" data-invite-id="${inv.id}">
               <div class="challenge-card-info">
-                <span class="challenge-sword-icon">⚔️</span>
+                <span class="challenge-sword-icon">${icons.spade({ size: 22, color: '#f5c542' })}</span>
                 <div class="challenge-text-box">
                   <span class="challenge-title">Nuova Sfida Ricevuta!</span>
                   <p class="challenge-msg"><strong>${inv.fromUsername}</strong> ti ha invitato a giocare a Scopa!</p>
@@ -354,9 +371,11 @@ export class LobbyView {
               </div>
               <div class="challenge-card-actions">
                 <button class="challenge-play-btn" data-action="accept" data-invite-id="${inv.id}">
+                  ${icons.check({ size: 16 })}
                   <span>Accetta e Gioca</span>
                 </button>
                 <button class="challenge-refuse-btn" data-action="decline" data-invite-id="${inv.id}">
+                  ${icons.close({ size: 16 })}
                   <span>Rifiuta</span>
                 </button>
               </div>
@@ -414,22 +433,26 @@ export class LobbyView {
     const statsBtn = document.getElementById('lobby-stats-btn');
     const statsDialog = document.getElementById('lobby-stats-dialog');
     const closeStatsBtn = document.getElementById('close-stats-btn');
+    const closeStatsIconBtn = document.getElementById('close-stats-icon-btn');
     statsBtn?.addEventListener('click', () => statsDialog?.showModal());
     closeStatsBtn?.addEventListener('click', () => statsDialog?.close());
+    closeStatsIconBtn?.addEventListener('click', () => statsDialog?.close());
 
     // Rules Dialog
     const rulesBtn = document.getElementById('lobby-rules-btn');
     const rulesDialog = document.getElementById('lobby-rules-dialog');
     const closeRulesBtn = document.getElementById('close-lobby-rules-btn');
+    const closeRulesIconBtn = document.getElementById('close-lobby-rules-icon-btn');
     rulesBtn?.addEventListener('click', () => rulesDialog?.showModal());
     closeRulesBtn?.addEventListener('click', () => rulesDialog?.close());
+    closeRulesIconBtn?.addEventListener('click', () => rulesDialog?.close());
 
     // Sound Toggle
     const soundBtn = document.getElementById('lobby-sound-btn');
     soundBtn?.addEventListener('click', () => {
       const isMuted = soundFx.toggleMute();
       const soundIcon = document.getElementById('lobby-sound-icon');
-      if (soundIcon) soundIcon.textContent = isMuted ? '🔇' : '🔊';
+      if (soundIcon) soundIcon.innerHTML = isMuted ? icons.volumeX({ size: 18 }) : icons.volume2({ size: 18 });
     });
 
     // PWA Install Action & Dialog
@@ -557,7 +580,7 @@ export class LobbyView {
       activeBox.innerHTML = `
         <div class="lobby-challenge-card active-session-card">
           <div class="challenge-card-info">
-            <span class="challenge-sword-icon">🎮</span>
+            <span class="challenge-sword-icon">${icons.play({ size: 22, color: '#f5c542' })}</span>
             <div class="challenge-text-box">
               <span class="challenge-title">Partita Online in Sospeso</span>
               <p class="challenge-msg">Hai una partita a Scopa attiva non conclusa. Vuoi riprenderla o chiuderla?</p>
@@ -565,9 +588,11 @@ export class LobbyView {
           </div>
           <div class="challenge-card-actions">
             <button class="challenge-play-btn" id="btn-resume-active-session">
+              ${icons.play({ size: 16 })}
               <span>Riprendi Partita</span>
             </button>
             <button class="challenge-refuse-btn" id="btn-abandon-active-session">
+              ${icons.abandon({ size: 16, color: '#ff6b6b' })}
               <span>Abbandona / Chiudi</span>
             </button>
           </div>

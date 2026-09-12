@@ -3,6 +3,7 @@
 import { authManager } from '../core/AuthManager.js';
 import { soundFx } from '../core/SoundFx.js';
 import { validatePassword, validateUsername } from '../utils/validators.js';
+import { icons } from '../utils/icons.js';
 
 export class AuthModal {
   constructor() {
@@ -26,7 +27,7 @@ export class AuthModal {
           </div>
           <h2 class="dialog-title" id="auth-modal-title">Benvenuto su Piuccia Games</h2>
           <p class="auth-subtitle" id="auth-modal-subtitle">Accedi per salvare il tuo profilo, le tue statistiche e giocare!</p>
-          <button class="dialog-close-x" id="auth-close-x" title="Chiudi finestra">✕</button>
+          <button class="dialog-close-x" id="auth-close-x" title="Chiudi finestra">${icons.close({ size: 20 })}</button>
         </div>
 
         <div class="auth-tabs" role="tablist">
@@ -45,7 +46,7 @@ export class AuthModal {
           <div class="auth-input-group">
             <label for="login-email">Email</label>
             <div class="input-with-icon">
-              <span class="input-icon">✉️</span>
+              <span class="input-icon">${icons.mail({ size: 18 })}</span>
               <input type="email" id="login-email" name="email" placeholder="nome@esempio.it" required autocomplete="email" />
             </div>
           </div>
@@ -53,7 +54,7 @@ export class AuthModal {
           <div class="auth-input-group">
             <label for="login-password">Password</label>
             <div class="input-with-icon">
-              <span class="input-icon">🔒</span>
+              <span class="input-icon">${icons.lock({ size: 18 })}</span>
               <input type="password" id="login-password" name="password" placeholder="La tua password" required autocomplete="current-password" />
             </div>
           </div>
@@ -69,7 +70,7 @@ export class AuthModal {
           <div class="auth-input-group">
             <label for="register-nickname">Nome Giocatore / Nickname</label>
             <div class="input-with-icon">
-              <span class="input-icon">👤</span>
+              <span class="input-icon">${icons.user({ size: 18 })}</span>
               <input type="text" id="register-nickname" name="nickname" placeholder="es. Piuccia, Mario..." required autocomplete="nickname" maxlength="20" />
             </div>
             <div class="field-feedback" id="modal-reg-nick-feedback"></div>
@@ -78,7 +79,7 @@ export class AuthModal {
           <div class="auth-input-group">
             <label for="register-email">Email</label>
             <div class="input-with-icon">
-              <span class="input-icon">✉️</span>
+              <span class="input-icon">${icons.mail({ size: 18 })}</span>
               <input type="email" id="register-email" name="email" placeholder="esempio@email.com" required autocomplete="email" />
             </div>
           </div>
@@ -86,24 +87,24 @@ export class AuthModal {
           <div class="auth-input-group">
             <label for="register-password">Password (almeno 8 caratteri)</label>
             <div class="input-with-icon">
-              <span class="input-icon">🔒</span>
+              <span class="input-icon">${icons.lock({ size: 18 })}</span>
               <input type="password" id="register-password" name="password" placeholder="Crea una password sicura" minlength="8" required autocomplete="new-password" />
             </div>
 
             <!-- Password checklist -->
             <div class="pw-checklist" id="modal-pw-checklist">
-              <div class="pw-check-item" id="mchk-len"><span class="pw-icon">✕</span> Minimo 8 caratteri</div>
-              <div class="pw-check-item" id="mchk-lower"><span class="pw-icon">✕</span> Lettera minuscola (a-z)</div>
-              <div class="pw-check-item" id="mchk-upper"><span class="pw-icon">✕</span> Lettera maiuscola (A-Z)</div>
-              <div class="pw-check-item" id="mchk-num"><span class="pw-icon">✕</span> Almeno un numero (0-9)</div>
-              <div class="pw-check-item" id="mchk-spec"><span class="pw-icon">✕</span> Simbolo speciale (!?#@...)</div>
+              <div class="pw-check-item" id="mchk-len"><span class="pw-icon">${icons.close({ size: 12 })}</span> Minimo 8 caratteri</div>
+              <div class="pw-check-item" id="mchk-lower"><span class="pw-icon">${icons.close({ size: 12 })}</span> Lettera minuscola (a-z)</div>
+              <div class="pw-check-item" id="mchk-upper"><span class="pw-icon">${icons.close({ size: 12 })}</span> Lettera maiuscola (A-Z)</div>
+              <div class="pw-check-item" id="mchk-num"><span class="pw-icon">${icons.close({ size: 12 })}</span> Almeno un numero (0-9)</div>
+              <div class="pw-check-item" id="mchk-spec"><span class="pw-icon">${icons.close({ size: 12 })}</span> Simbolo speciale (!?#@...)</div>
             </div>
           </div>
 
           <div class="auth-input-group">
             <label for="register-confirm-password">Conferma Password</label>
             <div class="input-with-icon">
-              <span class="input-icon">🔐</span>
+              <span class="input-icon">${icons.lock({ size: 18 })}</span>
               <input type="password" id="register-confirm-password" name="confirmPassword" placeholder="Ripeti la password" minlength="8" required autocomplete="new-password" />
             </div>
           </div>
@@ -197,10 +198,10 @@ export class AuthModal {
       if (!el) return;
       if (isValid) {
         el.className = 'pw-check-item valid';
-        el.innerHTML = `<span class="pw-icon">✓</span> ${text}`;
+        el.innerHTML = `<span class="pw-icon">${icons.check({ size: 12 })}</span> ${text}`;
       } else {
         el.className = 'pw-check-item';
-        el.innerHTML = `<span class="pw-icon">✕</span> ${text}`;
+        el.innerHTML = `<span class="pw-icon">${icons.close({ size: 12 })}</span> ${text}`;
       }
     };
 

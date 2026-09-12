@@ -4,6 +4,7 @@ import { friendsManager } from '../core/FriendsManager.js';
 import { soundFx } from '../core/SoundFx.js';
 import { gameManager } from '../core/GameManager.js';
 import { authManager } from '../core/AuthManager.js';
+import { icons } from '../utils/icons.js';
 
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, m => ({
@@ -66,26 +67,29 @@ export class FriendsModal {
         <!-- Modal Header -->
         <header class="friends-modal-header">
           <div class="friends-modal-title-box">
-            <span class="friends-title-icon">👥</span>
+            <span class="friends-title-icon">${icons.users({ size: 24, className: 'dialog-title-svg' })}</span>
             <div>
               <h2 class="dialog-title">Circolo Amici & Sfide</h2>
               <p class="friends-modal-subtitle">Trova amici per username e sfidali a Scopa!</p>
             </div>
           </div>
-          <button class="friends-modal-close-btn" id="friends-modal-close" title="Chiudi">✕</button>
+          <button class="friends-modal-close-btn" id="friends-modal-close" title="Chiudi">${icons.close({ size: 20 })}</button>
         </header>
 
         <!-- Navigation Tabs -->
         <div class="friends-modal-tabs" role="tablist">
           <button class="friends-tab-btn ${this.currentTab === 'friends' ? 'active' : ''}" id="ftab-friends">
-            <span>👥 Amici</span>
+            ${icons.users({ size: 16 })}
+            <span>Amici</span>
             <span class="tab-counter-badge" id="ftab-count-friends">0</span>
           </button>
           <button class="friends-tab-btn ${this.currentTab === 'search' ? 'active' : ''}" id="ftab-search">
-            <span>🔍 Cerca Giocatori</span>
+            ${icons.search({ size: 16 })}
+            <span>Cerca Giocatori</span>
           </button>
           <button class="friends-tab-btn ${this.currentTab === 'requests' ? 'active' : ''}" id="ftab-requests">
-            <span>📬 Richieste</span>
+            ${icons.inbox({ size: 16 })}
+            <span>Richieste</span>
             <span class="tab-counter-badge pulse-badge hidden" id="ftab-count-requests">0</span>
           </button>
         </div>
@@ -180,10 +184,13 @@ export class FriendsModal {
     if (friends.length === 0) {
       container.innerHTML = `
         <div class="friends-empty-state">
-          <div class="empty-icon">🤝</div>
+          <div class="empty-icon">${icons.users({ size: 42, color: '#f5c542' })}</div>
           <h3>Nessun amico ancora aggiunto</h3>
           <p>Cerca il nome dei tuoi amici nella scheda <strong>"Cerca Giocatori"</strong> per aggiungerli e sfidarli a Scopa!</p>
-          <button class="friends-cta-btn" id="cta-go-search">Trova Amici Ora</button>
+          <button class="friends-cta-btn" id="cta-go-search">
+            ${icons.search({ size: 16 })}
+            <span>Trova Amici Ora</span>
+          </button>
         </div>
       `;
       document.getElementById('cta-go-search')?.addEventListener('click', () => {
@@ -201,18 +208,19 @@ export class FriendsModal {
           ${friends.map(friend => `
             <li class="friend-card" data-friend-id="${friend.id}">
               <div class="friend-card-avatar">
-                <span>👤</span>
+                ${icons.user({ size: 20 })}
               </div>
               <div class="friend-card-info">
                 <span class="friend-username">${friend.username}</span>
-                <span class="friend-subtext">Amici</span>
+                <span class="friend-subtext">Amico</span>
               </div>
               <div class="friend-card-actions">
                 <button class="action-btn challenge-btn" data-action="challenge" data-friend-id="${friend.id}" data-friend-name="${friend.username}">
-                  <span>⚔️ Sfida</span>
+                  ${icons.spade({ size: 15 })}
+                  <span>Sfida</span>
                 </button>
                 <button class="action-btn icon-btn remove-friend-btn" data-action="remove" data-friend-id="${friend.id}" title="Rimuovi amico">
-                  <span>🗑️</span>
+                  ${icons.trash({ size: 16 })}
                 </button>
               </div>
             </li>
@@ -234,13 +242,13 @@ export class FriendsModal {
           const invite = await friendsManager.sendGameInvite(friendId, 'scopa');
           soundFx.playWin();
           btn.disabled = false;
-          btn.innerHTML = '<span>⚔️ Sfida</span>';
+          btn.innerHTML = `${icons.spade({ size: 15 })} <span>Sfida</span>`;
           this.showWaitingChallengeModal(invite, friendName);
         } catch (err) {
           soundFx.playSnap();
           alert(err.message || 'Errore durante l\'invio della sfida.');
           btn.disabled = false;
-          btn.innerHTML = '<span>⚔️ Sfida</span>';
+          btn.innerHTML = `${icons.spade({ size: 15 })} <span>Sfida</span>`;
         }
       });
     });
@@ -270,7 +278,7 @@ export class FriendsModal {
     overlay.className = 'challenge-waiting-overlay';
     overlay.innerHTML = `
       <div class="challenge-waiting-card">
-        <div class="waiting-sword-spin">⚔️</div>
+        <div class="waiting-sword-spin">${icons.spade({ size: 36, color: '#f5c542' })}</div>
         <h3 class="waiting-card-title">Sfida Inviata a <strong>${escapeHtml(friendName)}</strong>!</h3>
         <p class="waiting-card-desc">In attesa che l'avversario accetti la partita a Scopa...</p>
         
@@ -351,7 +359,7 @@ export class FriendsModal {
     container.innerHTML = `
       <div class="friends-search-box">
         <div class="search-input-wrapper">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon">${icons.search({ size: 18 })}</span>
           <input 
             type="text" 
             id="friends-search-input" 
@@ -359,7 +367,7 @@ export class FriendsModal {
             value="${this.searchQuery}" 
             autocomplete="off" 
           />
-          ${this.searchQuery ? `<button class="clear-search-btn" id="clear-search-btn">✕</button>` : ''}
+          ${this.searchQuery ? `<button class="clear-search-btn" id="clear-search-btn">${icons.close({ size: 16 })}</button>` : ''}
         </div>
       </div>
 
@@ -434,7 +442,7 @@ export class FriendsModal {
         ${this.searchResults.map(user => `
           <li class="friend-card" data-user-id="${user.id}">
             <div class="friend-card-avatar">
-              <span>👤</span>
+              ${icons.user({ size: 20 })}
             </div>
             <div class="friend-card-info">
               <span class="friend-username">${user.username}</span>
@@ -442,16 +450,18 @@ export class FriendsModal {
             </div>
             <div class="friend-card-actions">
               ${user.status === 'friend' ? `
-                <span class="status-badge badge-friend">✓ Amico</span>
+                <span class="status-badge badge-friend">${icons.check({ size: 14 })} Amico</span>
               ` : user.status === 'request_sent' ? `
-                <span class="status-badge badge-pending">⏳ Richiesta Inviata</span>
+                <span class="status-badge badge-pending">${icons.clock({ size: 14 })} Richiesta Inviata</span>
               ` : user.status === 'request_received' ? `
                 <button class="action-btn accept-btn" data-action="send-request" data-user-id="${user.id}">
-                  <span>✓ Accetta</span>
+                  ${icons.check({ size: 14 })}
+                  <span>Accetta</span>
                 </button>
               ` : `
                 <button class="action-btn send-req-btn" data-action="send-request" data-user-id="${user.id}">
-                  <span>➕ Aggiungi</span>
+                  ${icons.users({ size: 14 })}
+                  <span>Aggiungi</span>
                 </button>
               `}
             </div>
@@ -473,15 +483,15 @@ export class FriendsModal {
           const result = await friendsManager.sendFriendRequest(targetUserId);
           soundFx.playWin();
           if (result === 'accepted' || result === 'already_friends') {
-            btn.outerHTML = `<span class="status-badge badge-friend">✓ Amico</span>`;
+            btn.outerHTML = `<span class="status-badge badge-friend">${icons.check({ size: 14 })} Amico</span>`;
           } else {
-            btn.outerHTML = `<span class="status-badge badge-pending">⏳ Richiesta Inviata</span>`;
+            btn.outerHTML = `<span class="status-badge badge-pending">${icons.clock({ size: 14 })} Richiesta Inviata</span>`;
           }
         } catch (err) {
           soundFx.playSnap();
           alert(err.message || 'Errore durante l\'invio della richiesta.');
           btn.disabled = false;
-          btn.innerHTML = '<span>➕ Aggiungi</span>';
+          btn.innerHTML = `${icons.users({ size: 14 })} <span>Aggiungi</span>`;
         }
       });
     });
@@ -491,7 +501,7 @@ export class FriendsModal {
     if (incoming.length === 0 && outgoing.length === 0 && incomingInvites.length === 0) {
       container.innerHTML = `
         <div class="friends-empty-state">
-          <div class="empty-icon">📭</div>
+          <div class="empty-icon">${icons.inbox({ size: 40, color: '#f5c542' })}</div>
           <h3>Nessuna richiesta o sfida</h3>
           <p>Quando qualcuno ti invia una sfida di gioco o una richiesta di amicizia, la troverai qui.</p>
         </div>
@@ -504,12 +514,12 @@ export class FriendsModal {
         <!-- SFIDE DI GIOCO RICEVUTE -->
         ${incomingInvites.length > 0 ? `
           <section class="requests-sub-section received-challenges-section">
-            <h4 class="requests-section-title">⚔️ Sfide di Gioco in Arrivo (${incomingInvites.length})</h4>
+            <h4 class="requests-section-title">${icons.spade({ size: 16, color: '#f5c542' })} Sfide di Gioco in Arrivo (${incomingInvites.length})</h4>
             <ul class="friends-card-list">
               ${incomingInvites.map(inv => `
                 <li class="friend-card challenge-invite-card" data-inv-id="${inv.id}">
                   <div class="friend-card-avatar challenge-avatar">
-                    <span>⚔️</span>
+                    ${icons.spade({ size: 20, color: '#f5c542' })}
                   </div>
                   <div class="friend-card-info">
                     <span class="friend-username">${escapeHtml(inv.fromUsername)}</span>
@@ -517,10 +527,12 @@ export class FriendsModal {
                   </div>
                   <div class="friend-card-actions">
                     <button class="action-btn accept-btn challenge-accept-btn" data-action="accept-invite" data-inv-id="${inv.id}">
-                      <span>✓ Accetta</span>
+                      ${icons.check({ size: 14 })}
+                      <span>Accetta</span>
                     </button>
                     <button class="action-btn reject-btn" data-action="reject-invite" data-inv-id="${inv.id}">
-                      <span>✕ Rifiuta</span>
+                      ${icons.close({ size: 14 })}
+                      <span>Rifiuta</span>
                     </button>
                   </div>
                 </li>
@@ -531,7 +543,7 @@ export class FriendsModal {
 
         <!-- RICHIESTE AMICIZIA RICEVUTE -->
         <section class="requests-sub-section">
-          <h4 class="requests-section-title">Richieste di Amicizia Ricevute (${incoming.length})</h4>
+          <h4 class="requests-section-title">${icons.users({ size: 16 })} Richieste di Amicizia Ricevute (${incoming.length})</h4>
           ${incoming.length === 0 ? `
             <p class="requests-sub-empty">Non hai richieste di amicizia in arrivo.</p>
           ` : `
@@ -539,7 +551,7 @@ export class FriendsModal {
               ${incoming.map(req => `
                 <li class="friend-card" data-req-id="${req.id}">
                   <div class="friend-card-avatar">
-                    <span>👤</span>
+                    ${icons.user({ size: 20 })}
                   </div>
                   <div class="friend-card-info">
                     <span class="friend-username">${escapeHtml(req.username)}</span>
@@ -547,10 +559,12 @@ export class FriendsModal {
                   </div>
                   <div class="friend-card-actions">
                     <button class="action-btn accept-btn" data-action="accept-req" data-req-id="${req.id}">
-                      <span>✓ Accetta</span>
+                      ${icons.check({ size: 14 })}
+                      <span>Accetta</span>
                     </button>
                     <button class="action-btn reject-btn" data-action="reject-req" data-req-id="${req.id}">
-                      <span>✕ Rifiuta</span>
+                      ${icons.close({ size: 14 })}
+                      <span>Rifiuta</span>
                     </button>
                   </div>
                 </li>
@@ -561,7 +575,7 @@ export class FriendsModal {
 
         <!-- INVIATE -->
         <section class="requests-sub-section">
-          <h4 class="requests-section-title">Richieste Inviate in Attesa (${outgoing.length})</h4>
+          <h4 class="requests-section-title">${icons.clock({ size: 16 })} Richieste Inviate in Attesa (${outgoing.length})</h4>
           ${outgoing.length === 0 ? `
             <p class="requests-sub-empty">Nessuna richiesta in attesa.</p>
           ` : `
@@ -569,7 +583,7 @@ export class FriendsModal {
               ${outgoing.map(req => `
                 <li class="friend-card" data-req-id="${req.id}">
                   <div class="friend-card-avatar">
-                    <span>👤</span>
+                    ${icons.user({ size: 20 })}
                   </div>
                   <div class="friend-card-info">
                     <span class="friend-username">${escapeHtml(req.username)}</span>
@@ -577,6 +591,7 @@ export class FriendsModal {
                   </div>
                   <div class="friend-card-actions">
                     <button class="action-btn cancel-req-btn" data-action="cancel-req" data-req-id="${req.id}">
+                      ${icons.close({ size: 14 })}
                       <span>Annulla</span>
                     </button>
                   </div>
@@ -602,7 +617,7 @@ export class FriendsModal {
         } catch (err) {
           alert(err.message || 'Impossibile avviare la partita.');
           btn.disabled = false;
-          btn.innerHTML = '<span>✓ Accetta</span>';
+          btn.innerHTML = `${icons.check({ size: 14 })} <span>Accetta</span>`;
         }
       });
     });

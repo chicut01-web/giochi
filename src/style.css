@@ -404,6 +404,9 @@ html, body {
 }
 
 .scopa-pip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.25);
   padding: 4px 8px;
@@ -412,6 +415,12 @@ html, body {
   font-weight: 700;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+}
+
+.scopa-pip svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .pip-denari {
@@ -535,12 +544,61 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  background: rgba(10, 20, 14, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  padding: 0 20px;
+  background: rgba(8, 22, 16, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(245, 197, 66, 0.25);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   z-index: 10;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.header-right,
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scopa-btn-danger.abandon-match-btn {
+  background: rgba(220, 53, 69, 0.18);
+  color: #ff7675;
+  border: 1.5px solid rgba(255, 118, 117, 0.45);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.scopa-btn-danger.abandon-match-btn:hover {
+  background: rgba(220, 53, 69, 0.35);
+  color: #ffffff;
+  border-color: rgba(255, 118, 117, 0.8);
+  box-shadow: 0 0 14px rgba(220, 53, 69, 0.45);
+  transform: translateY(-1px);
+}
+
+.scopa-btn-danger.abandon-match-btn:active {
+  transform: scale(0.96);
 }
 
 .scoreboard-pill {
@@ -591,12 +649,6 @@ html, body {
   padding: 2px 8px;
   border-radius: 12px;
   font-weight: 600;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 /* Felt Gaming Surface */
@@ -1303,6 +1355,64 @@ dialog[open]::backdrop {
   color: #ff7675;
 }
 
+.dialog-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.dialog-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gold-primary);
+}
+
+.dialog-title-with-icon .dialog-title {
+  margin-bottom: 0;
+  text-align: left;
+}
+
+.dialog-title-svg {
+  color: var(--gold-primary);
+  flex-shrink: 0;
+}
+
+.dialog-close-icon-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--transition-speed);
+  flex-shrink: 0;
+}
+
+.dialog-close-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.dialog-close-icon-btn:active {
+  transform: scale(0.95);
+}
+
+.dialog-icon-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
 .dialog-desc {
   font-size: 0.92rem;
   color: var(--text-muted);
@@ -1712,13 +1822,38 @@ dialog[open]::backdrop {
 
   /* Arena Header */
   .scopa-header {
-    height: 48px;
-    min-height: 48px;
-    padding: 2px 8px;
-    gap: 4px;
+    height: 52px;
+    min-height: 52px;
+    padding: 4px 10px;
+    gap: 6px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .header-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .header-right,
+  .header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
     flex-shrink: 0;
   }
 
@@ -1727,21 +1862,47 @@ dialog[open]::backdrop {
     font-size: 0.78rem;
     gap: 4px;
     min-height: 36px;
+    min-width: 36px;
     touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  #scopa-rules-btn .btn-text {
+  #exit-btn .btn-text,
+  #abandon-match-btn .btn-text,
+  #scopa-rules-btn .btn-text,
+  #scopa-back-btn .btn-text {
     display: none;
   }
 
-  #scopa-rules-btn {
+  #exit-btn,
+  #scopa-rules-btn,
+  #scopa-back-btn {
     min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
     justify-content: center;
-    padding: 6px 8px;
+  }
+
+  .scopa-btn-danger.abandon-match-btn {
+    padding: 6px;
+    min-width: 36px;
+    min-height: 36px;
+    background: rgba(220, 53, 69, 0.28);
+    border: 1.5px solid rgba(255, 118, 117, 0.65);
+    color: #ff7675;
+    border-radius: 10px;
+    justify-content: center;
+  }
+
+  .scopa-btn-danger.abandon-match-btn svg {
+    width: 18px;
+    height: 18px;
   }
 
   .scoreboard-pill {
-    padding: 3px 10px;
+    padding: 4px 10px;
     gap: 8px;
     border-radius: 14px;
     white-space: nowrap;
@@ -1753,7 +1914,7 @@ dialog[open]::backdrop {
 
   .team-score {
     font-size: 1.15rem;
-    min-width: 18px;
+    min-width: 16px;
   }
 
   .target-badge {
@@ -1788,10 +1949,6 @@ dialog[open]::backdrop {
 
   .timer-sub {
     display: none;
-  }
-
-  .header-actions {
-    gap: 4px;
   }
 
   .header-actions .scopa-btn {
@@ -2100,23 +2257,29 @@ dialog[open]::backdrop {
   }
 
   .scopa-header {
-    padding: 3px 5px;
+    padding: 2px 4px;
     gap: 3px;
   }
 
-  #scopa-back-btn .btn-text {
-    display: none;
+  #exit-btn,
+  #abandon-match-btn,
+  #scopa-rules-btn,
+  #scopa-sound-btn,
+  #scopa-back-btn {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px;
   }
 
-  #scopa-back-btn {
-    min-width: 36px;
-    justify-content: center;
-    padding: 6px;
+  .scopa-btn-danger.abandon-match-btn {
+    padding: 4px;
+    min-width: 32px;
+    min-height: 32px;
   }
 
   .scoreboard-pill {
     padding: 2px 6px;
-    gap: 5px;
+    gap: 4px;
   }
 }
 
