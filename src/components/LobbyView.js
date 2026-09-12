@@ -88,122 +88,101 @@ export class LobbyView {
         <div class="lobby-challenges-container" id="lobby-challenges-container"></div>
         <div class="lobby-challenges-container" id="lobby-active-session-container"></div>
 
-        <!-- Main Catalog Section -->
+        <!-- Main Hero Showcase Section -->
         <main class="lobby-content">
-          <div class="section-heading">
-            <h2 class="section-title">Scegli il tuo Gioco</h2>
-            <p class="section-desc">Seleziona una sala e sfida l'Intelligenza Artificiale o un amico.</p>
-          </div>
-
-          <div class="games-grid">
-            <!-- GAME 1: SCOPA (ACTIVE) -->
-            <article class="game-card active-game" id="card-scopa">
-              <div class="card-status-pill status-ready">Disponibile Ora</div>
-              
-              <div class="game-card-banner banner-scopa">
-                <div class="card-art-illustration">
-                  <span class="scopa-pip pip-denari">${icons.denari({ size: 15 })} 7 Bello</span>
-                  <span class="scopa-pip pip-coppe">${icons.coppe({ size: 15 })} Asso</span>
-                  <span class="scopa-pip pip-spade">${icons.spade({ size: 15 })} Re</span>
+          <div class="hero-arena-card" id="card-scopa">
+            <!-- Left Side: Visual Card Fan with Real Dal Negro Neapolitan Cards -->
+            <div class="hero-visual-showcase">
+              <div class="cards-fan-container">
+                <div class="fan-card fan-card-1">
+                  <img src="/carte/31_Asso_di_bastoni.jpg" alt="Asso di Bastoni" class="fan-card-img" />
                 </div>
-                <div class="scopa-card-title-box">
-                  <h3 class="game-title">Scopa</h3>
-                  <span class="game-category">Carte Tradizionali Italiane</span>
+                <div class="fan-card fan-card-2">
+                  <img src="/carte/07_Sette_di_denari.jpg" alt="Il Settebello" class="fan-card-img" />
+                  <div class="fan-card-badge">Settebello</div>
+                </div>
+                <div class="fan-card fan-card-3">
+                  <img src="/carte/20_Dieci_di_coppe.jpg" alt="Re di Coppe" class="fan-card-img" />
                 </div>
               </div>
+              <div class="hero-authenticity-badge">
+                <span class="badge-dot"></span>
+                <span>Carte Napoletane Dal Negro • Tavolo Ufficiale</span>
+              </div>
+            </div>
 
-              <div class="game-card-body">
-                <p class="game-summary">
-                  Il re indiscusso delle osterie e dei salotti italiani. Prendi a terra con singole e somme, conquista il Settebello e fai piazza pulita per gridare <strong>Scopa!</strong>
-                </p>
-
-                <!-- Game Config Selector -->
-                <div class="game-mode-selector">
-                  <label class="mode-label">Punteggio Partita:</label>
-                  <div class="mode-options" id="scopa-target-options">
-                    <button class="mode-btn ${gameManager.settings.targetPoints === 11 ? 'active' : ''}" data-target="11">11 Punti</button>
-                    <button class="mode-btn ${gameManager.settings.targetPoints === 21 ? 'active' : ''}" data-target="21">21 Punti</button>
-                    <button class="mode-btn ${gameManager.settings.targetPoints === 1 ? 'active' : ''}" data-target="1">1 Smazzata</button>
-                  </div>
+            <!-- Right Side: Game Presentation & Launch Controls -->
+            <div class="hero-controls-panel">
+              <div class="hero-title-group">
+                <div class="hero-tag-row">
+                  <span class="hero-tag">Classico d'Autore</span>
+                  <span class="hero-status-tag"><span class="status-live-dot"></span>Tavolo Attivo</span>
                 </div>
+                <h2 class="hero-game-title">Scopa Tradizionale</h2>
+                <p class="hero-game-desc">
+                  Il grande classico delle carte italiane. Cattura dal tavolo con singole o somme, conquista Settebello, Primiera, Denari e fai piazza pulita per gridare <strong>Scopa!</strong>
+                </p>
+              </div>
 
-                <div class="card-footer">
-                  <button class="play-btn primary-btn" id="start-scopa-btn">
-                    ${icons.play({ size: 20 })}
-                    <span>Gioca Ora a Scopa</span>
+              <!-- Match Target Settings -->
+              <div class="hero-settings-box">
+                <div class="settings-label-row">
+                  <span class="settings-title">${icons.target({ size: 16 })} Obiettivo Partita:</span>
+                </div>
+                <div class="mode-options" id="scopa-target-options">
+                  <button class="mode-btn ${gameManager.settings.targetPoints === 11 ? 'active' : ''}" data-target="11">
+                    <span class="mode-pts">11 Punti</span>
+                    <span class="mode-sub">Classica</span>
+                  </button>
+                  <button class="mode-btn ${gameManager.settings.targetPoints === 21 ? 'active' : ''}" data-target="21">
+                    <span class="mode-pts">21 Punti</span>
+                    <span class="mode-sub">Lunga</span>
+                  </button>
+                  <button class="mode-btn ${gameManager.settings.targetPoints === 1 ? 'active' : ''}" data-target="1">
+                    <span class="mode-pts">1 Smazzata</span>
+                    <span class="mode-sub">Rapida</span>
                   </button>
                 </div>
               </div>
-            </article>
 
-            <!-- GAME 2: BRISCOLA (UPCOMING) -->
-            <article class="game-card upcoming-game">
-              <div class="card-status-pill status-upcoming">Prossimamente</div>
-              <div class="game-card-banner banner-briscola">
-                <div class="card-art-illustration">
-                  <span class="scopa-pip pip-spade">${icons.spade({ size: 15 })} Asso</span>
-                  <span class="scopa-pip pip-bastoni">${icons.bastoni({ size: 15 })} Tre</span>
-                </div>
-                <div class="scopa-card-title-box">
-                  <h3 class="game-title">Briscola</h3>
-                  <span class="game-category">Prese & Strategia</span>
-                </div>
+              <!-- Quick Action Play Buttons -->
+              <div class="hero-actions-row">
+                <button class="hero-play-btn primary-btn" id="start-scopa-btn">
+                  <span class="btn-icon-wrapper">${icons.play({ size: 22 })}</span>
+                  <div class="btn-text-block">
+                    <span class="btn-primary-text">Gioca Locale</span>
+                    <span class="btn-secondary-text">Sfida l'Intelligenza Artificiale</span>
+                  </div>
+                </button>
+                <button class="hero-multiplayer-btn secondary-btn" id="hero-multiplayer-btn">
+                  <span class="btn-icon-wrapper">${icons.users({ size: 22 })}</span>
+                  <div class="btn-text-block">
+                    <span class="btn-primary-text">Sfida un Amico</span>
+                    <span class="btn-secondary-text">Partita Online Privata</span>
+                  </div>
+                </button>
               </div>
-              <div class="game-card-body">
-                <p class="game-summary">
-                  Il gioco di prese più amato d'Italia. Gestisci i carichi, sfrutta il seme di briscola e porta a casa la vittoria fino a 61 punti.
-                </p>
-                <div class="card-footer">
-                  <button class="play-btn disabled-btn" disabled>In Sviluppo</button>
-                </div>
-              </div>
-            </article>
 
-            <!-- GAME 3: TRESETTE (UPCOMING) -->
-            <article class="game-card upcoming-game">
-              <div class="card-status-pill status-upcoming">Prossimamente</div>
-              <div class="game-card-banner banner-tresette">
-                <div class="card-art-illustration">
-                  <span class="scopa-pip pip-bastoni">${icons.bastoni({ size: 15 })} 3</span>
-                  <span class="scopa-pip pip-coppe">${icons.coppe({ size: 15 })} 2</span>
+              <!-- Real-Time Player Stats Strip -->
+              <div class="hero-stats-strip">
+                <div class="stat-pill">
+                  <span class="stat-pill-num">${stats.matchesPlayed}</span>
+                  <span class="stat-pill-lbl">Partite</span>
                 </div>
-                <div class="scopa-card-title-box">
-                  <h3 class="game-title">Tresette</h3>
-                  <span class="game-category">Strategia Pura</span>
+                <div class="stat-pill">
+                  <span class="stat-pill-num">${stats.matchesWon}</span>
+                  <span class="stat-pill-lbl">Vittorie (${winRate}%)</span>
                 </div>
-              </div>
-              <div class="game-card-body">
-                <p class="game-summary">
-                  Niente fortuna, solo memoria di ferro e intuito. Rispetta il palo, dichiara le accuse e conquista l'ultima presa per vincere.
-                </p>
-                <div class="card-footer">
-                  <button class="play-btn disabled-btn" disabled>In Sviluppo</button>
+                <div class="stat-pill">
+                  <span class="stat-pill-num">${stats.totalScope}</span>
+                  <span class="stat-pill-lbl">Scope</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="stat-pill-num">${stats.totalSettebelli}</span>
+                  <span class="stat-pill-lbl">Settebelli</span>
                 </div>
               </div>
-            </article>
-
-            <!-- GAME 4: SETTE E MEZZO (UPCOMING) -->
-            <article class="game-card upcoming-game">
-              <div class="card-status-pill status-upcoming">Prossimamente</div>
-              <div class="game-card-banner banner-settemezzo">
-                <div class="card-art-illustration">
-                  <span class="scopa-pip pip-denari">${icons.denari({ size: 15 })} Re Matta</span>
-                  <span class="scopa-pip">½</span>
-                </div>
-                <div class="scopa-card-title-box">
-                  <h3 class="game-title">Sette e Mezzo</h3>
-                  <span class="game-category">Banco & Rischio</span>
-                </div>
-              </div>
-              <div class="game-card-body">
-                <p class="game-summary">
-                  Sfida il banco nel blackjack della tradizione italiana. Chiedi carta o stai attento a non sballare oltre il magico 7 e ½!
-                </p>
-                <div class="card-footer">
-                  <button class="play-btn disabled-btn" disabled>In Sviluppo</button>
-                </div>
-              </div>
-            </article>
+            </div>
           </div>
         </main>
 
@@ -427,6 +406,22 @@ export class LobbyView {
         return;
       }
       gameManager.setView('scopa');
+    });
+
+    // Hero Multiplayer Button (Challenge a friend online)
+    document.getElementById('hero-multiplayer-btn')?.addEventListener('click', () => {
+      soundFx.playSnap();
+      if (!authManager.isAuthenticated()) {
+        authModal.open({
+          mode: 'register',
+          notice: 'Per sfidare un amico online, registrati o accedi al tuo account!',
+          onAuthenticated: () => {
+            friendsModal.open();
+          }
+        });
+        return;
+      }
+      friendsModal.open();
     });
 
     // Stats Dialog
