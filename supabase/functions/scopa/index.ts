@@ -1,5 +1,8 @@
+// @ts-ignore: Deno/JSR import
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { createMatch, applyMove, autoMove, buildView, nextRound } from '../_shared/ScopaMatch.js';
+
+declare const Deno: any;
 
 const TURN_SECONDS = 25;
 
@@ -97,7 +100,7 @@ async function persist(session: any, snapshot: any, status: string, winnerSeat: 
   return data as number;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
   try {
@@ -193,13 +196,14 @@ Deno.serve(async (req) => {
       if (!secretRes.data?.state) return json({ error: 'state_missing' }, 500);
 
       const res = applyMove(secretRes.data.state, seat, body.cardId, body.chosenOption || null);
-      if (!res.ok) return json({ error: res.error }, 400);
+      if (!res.ok || !res.snapshot) return json({ error: res.error || 'move_failed' }, 400);
+      const snapshot = res.snapshot;
 
-      const over = res.snapshot.public.isMatchOver;
+      const over = snapshot.public.isMatchOver;
       const v = await persist(
-        session, res.snapshot,
+        session, snapshot,
         over ? 'finished' : 'active',
-        over ? res.snapshot.public.matchWinnerSeat : null
+        over ? snapshot.public.matchWinnerSeat : null
       );
       if (v === -1) {
         const ctx = await viewFor(sessionId, user.id);
@@ -208,11 +212,11 @@ Deno.serve(async (req) => {
 
       const names = await loadUsernames([session.player_a, session.player_b]);
       const view = buildView({
-        publicState: res.snapshot.public,
-        hand: res.snapshot.hands[seat],
+        publicState: snapshot.public,
+        hand: snapshot.hands[seat],
         seat,
         status: over ? 'finished' : 'active',
-        turnSeat: res.snapshot.turnSeat,
+        turnSeat: snapshot.turnSeat,
         turnDeadline: over ? null : deadline(),
         version: v,
         usernames: {
@@ -248,13 +252,14 @@ Deno.serve(async (req) => {
       if (!secretRes.data?.state) return json({ error: 'state_missing' }, 500);
 
       const res = autoMove(secretRes.data.state, session.turn_seat);
-      if (!res.ok) return json({ error: res.error }, 400);
+      if (!res.ok || !res.snapshot) return json({ error: res.error || 'timeout_failed' }, 400);
+      const snapshot = res.snapshot;
 
-      const over = res.snapshot.public.isMatchOver;
+      const over = snapshot.public.isMatchOver;
       const v = await persist(
-        session, res.snapshot,
+        session, snapshot,
         over ? 'finished' : 'active',
-        over ? res.snapshot.public.matchWinnerSeat : null
+        over ? snapshot.public.matchWinnerSeat : null
       );
       if (v === -1) {
         const ctx = await viewFor(sessionId, user.id);
@@ -263,11 +268,11 @@ Deno.serve(async (req) => {
 
       const names = await loadUsernames([session.player_a, session.player_b]);
       const view = buildView({
-        publicState: res.snapshot.public,
-        hand: res.snapshot.hands[seat],
+        publicState: snapshot.public,
+        hand: snapshot.hands[seat],
         seat,
         status: over ? 'finished' : 'active',
-        turnSeat: res.snapshot.turnSeat,
+        turnSeat: snapshot.turnSeat,
         turnDeadline: over ? null : deadline(),
         version: v,
         usernames: {
@@ -300,9 +305,10 @@ Deno.serve(async (req) => {
       if (!secretRes.data?.state) return json({ error: 'state_missing' }, 500);
 
       const res = nextRound(secretRes.data.state);
-      if (!res.ok) return json({ error: res.error }, 400);
+      if (!res.ok || !res.snapshot) return json({ error: res.error || 'next_round_failed' }, 400);
+      const snapshot = res.snapshot;
 
-      const v = await persist(session, res.snapshot, 'active', null);
+      const v = await persist(session, snapshot, 'active', null);
       if (v === -1) {
         const ctx = await viewFor(sessionId, user.id);
         return json({ error: 'version_conflict', view: 'view' in ctx ? ctx.view : undefined }, 409);
@@ -310,11 +316,11 @@ Deno.serve(async (req) => {
 
       const names = await loadUsernames([session.player_a, session.player_b]);
       const view = buildView({
-        publicState: res.snapshot.public,
-        hand: res.snapshot.hands[seat],
+        publicState: snapshot.public,
+        hand: snapshot.hands[seat],
         seat,
         status: 'active',
-        turnSeat: res.snapshot.turnSeat,
+        turnSeat: snapshot.turnSeat,
         turnDeadline: deadline(),
         version: v,
         usernames: {

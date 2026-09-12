@@ -256,6 +256,7 @@ html, body {
   letter-spacing: 0.5px;
   background: linear-gradient(135deg, #ffffff 0%, #f5c542 60%, #e5a910 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -2331,6 +2332,7 @@ dialog[open]::backdrop {
   font-weight: 800;
   background: linear-gradient(135deg, #ffffff 0%, #f5c542 60%, #e5a910 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 4px;
   letter-spacing: 0.5px;
@@ -2584,6 +2586,7 @@ dialog[open]::backdrop {
   font-weight: 800;
   background: linear-gradient(135deg, #ffffff 0%, #f5c542 60%, #e5a910 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
