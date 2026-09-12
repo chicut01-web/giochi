@@ -14,6 +14,7 @@ export class ScopaView {
     this.timerSeconds = 10;
     this.timerInterval = null;
     this.timerRole = null;
+    this.cpuThinkingTimeout = null;
   }
 
   init(options = {}) {
@@ -40,6 +41,8 @@ export class ScopaView {
     this.startTurnTimer(this.engine.currentTurn);
     if (this.engine.currentTurn === 'cpu') {
       this.triggerCpuTurn();
+    } else {
+      this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
     }
   }
 
@@ -273,6 +276,9 @@ export class ScopaView {
     document.getElementById('next-round-btn')?.addEventListener('click', () => {
       const dialog = document.getElementById('round-score-dialog');
       dialog?.close();
+      this.isProcessing = false;
+      this.stopTurnTimer();
+
       if (this.engine.isMatchOver) {
         gameManager.setView('lobby');
       } else {
@@ -282,14 +288,20 @@ export class ScopaView {
         this.startTurnTimer(this.engine.currentTurn);
         if (this.engine.currentTurn === 'cpu') {
           this.triggerCpuTurn();
+        } else {
+          this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
         }
       }
     });
 
-    // Cancel Capture Choice Button
+    // Cancel Capture Choice Button & Dialog Escape
+    const choiceDialog = document.getElementById('capture-choice-dialog');
     document.getElementById('cancel-capture-choice-btn')?.addEventListener('click', () => {
-      const dialog = document.getElementById('capture-choice-dialog');
-      dialog?.close();
+      choiceDialog?.close();
+      this.isProcessing = false;
+      this.resumeTimer();
+    });
+    choiceDialog?.addEventListener('cancel', () => {
       this.isProcessing = false;
       this.resumeTimer();
     });
@@ -322,6 +334,10 @@ export class ScopaView {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
+    }
+    if (this.cpuThinkingTimeout) {
+      clearTimeout(this.cpuThinkingTimeout);
+      this.cpuThinkingTimeout = null;
     }
   }
 
@@ -368,8 +384,15 @@ export class ScopaView {
         this.playMoveSequence('player', decision.card, decision.chosenOption);
       }
     } else {
-      // CPU auto trigger
-      this.triggerCpuTurn();
+      // CPU auto trigger: execute immediately without waiting
+      if (this.cpuThinkingTimeout) {
+        clearTimeout(this.cpuThinkingTimeout);
+        this.cpuThinkingTimeout = null;
+      }
+      const decision = ScopaAI.decideMove(this.engine.cpuHand, this.engine.tableCards, this.engine);
+      if (decision && decision.card) {
+        this.playMoveSequence('cpu', decision.card, decision.chosenOption);
+      }
     }
   }
 
@@ -589,108 +612,121 @@ export class ScopaView {
     this.stopTurnTimer();
     this.isProcessing = true;
 
-    // 1. Identify what capture will take place before modifying engine state
-    const captureInfo = this.engine.getCaptureOptions(card, this.engine.tableCards);
-    let capturedCards = [];
+    try {
+      // 1. Identify what capture will take place before modifying engine state
+      const captureInfo = this.engine.getCaptureOptions(card, this.engine.tableCards);
+      let capturedCards = [];
 
-    if (captureInfo.type !== 'none' && captureInfo.options.length > 0) {
-      if (chosenOption && Array.isArray(chosenOption)) {
-        capturedCards = chosenOption;
-      } else {
-        capturedCards = captureInfo.options[0];
-      }
-    }
-
-    const isCapture = capturedCards.length > 0;
-    const isPlayer = role === 'player';
-    const actorName = isPlayer ? 'Tu' : 'CPU';
-
-    this.setNarrator(isPlayer ? '👤' : '🤖', `${actorName} gioca ${card.name}...`);
-
-    // 2. Animate the played card moving smoothly onto the open green felt of the table
-    const playedFlyEl = await this.animateCardPlay(role, card);
-
-    // 3. Comfortable pause on the green space so the card is clearly visible ("così si vede bene")
-    if (isCapture) {
-      // Highlight captured cards on table with golden glow
-      capturedCards.forEach(c => {
-        const tableCardEl = document.getElementById(`table-card-${c.id}`);
-        if (tableCardEl) {
-          tableCardEl.classList.add('card-target-capture');
+      if (captureInfo.type !== 'none' && captureInfo.options.length > 0) {
+        if (chosenOption && Array.isArray(chosenOption)) {
+          capturedCards = chosenOption;
+        } else {
+          capturedCards = captureInfo.options[0];
         }
-      });
-
-      const targetsDesc = capturedCards.map(c => c.name).join(' + ');
-      this.setNarrator('🎯', `Presa! ${card.name} raccoglie ${targetsDesc}`);
-
-      // Sound & haptic feedback
-      soundFx.playCapture();
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(28); } catch (e) {}
-      }
-      if (capturedCards.some(c => c.isSettebello || c.suit === 'denari') || card.isSettebello) {
-        soundFx.playCoin();
       }
 
-      // Generous pause to clearly see the played card and the highlighted captures (680ms)
-      await new Promise(r => setTimeout(r, 680));
+      const isCapture = capturedCards.length > 0;
+      const isPlayer = role === 'player';
+      const actorName = isPlayer ? 'Tu' : 'CPU';
 
-      // Smooth flight of both played card and target cards into the capture pile (600ms)
-      await this.animateCaptureToPile(role, playedFlyEl, capturedCards);
-    } else {
-      // No capture: The card rests clearly visible on the green felt, then smoothly slides into place with the table cards
-      this.setNarrator('🌱', `${actorName} cala ${card.name}: resta sul tavolo`);
-      
-      // Pause on green space so it's clearly seen (650ms)
-      await new Promise(r => setTimeout(r, 650));
-      
-      // Smoothly slide the card from the green space into its target slot inside table-cards-field!
-      await this.animateCardJoinTable(playedFlyEl, card);
-    }
+      this.setNarrator(isPlayer ? '👤' : '🤖', `${actorName} gioca ${card.name}...`);
 
-    // 4. Actually execute card move in game engine
-    const result = this.engine.playCard(role, card.id, chosenOption);
+      // 2. Animate the played card moving smoothly onto the open green felt of the table
+      const playedFlyEl = await this.animateCardPlay(role, card);
 
-    // Update board with clean state
-    this.updateBoard();
+      // 3. Comfortable pause on the green space so the card is clearly visible ("così si vede bene")
+      if (isCapture) {
+        // Highlight captured cards on table with golden glow
+        capturedCards.forEach(c => {
+          const tableCardEl = document.getElementById(`table-card-${c.id}`);
+          if (tableCardEl) {
+            tableCardEl.classList.add('card-target-capture');
+          }
+        });
 
-    // Clean up flying card right as new table card is inserted
-    if (playedFlyEl && playedFlyEl.parentNode) {
-      playedFlyEl.remove();
-    }
+        const targetsDesc = capturedCards.map(c => c.name).join(' + ');
+        this.setNarrator('🎯', `Presa! ${card.name} raccoglie ${targetsDesc}`);
 
-    // 5. Scopa celebration
-    if (result.isScopa) {
-      this.triggerScopaCelebration(isPlayer ? '✨ Hai fatto Scopa! (+1) ✨' : '🤖 La CPU ha fatto Scopa! (+1)');
-      await new Promise(r => setTimeout(r, 1200));
-    }
+        // Sound & haptic feedback
+        soundFx.playCapture();
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate(28); } catch (e) {}
+        }
+        if (capturedCards.some(c => c.isSettebello || c.suit === 'denari') || card.isSettebello) {
+          soundFx.playCoin();
+        }
 
-    // 6. Check deal of new hands
-    if (result.dealtNewHands) {
-      soundFx.playDeal();
-      this.setNarrator('🎴', 'Nuova mano di 3 carte distribuita dal mazzo');
-      await new Promise(r => setTimeout(r, 600));
+        // Generous pause to clearly see the played card and the highlighted captures (680ms)
+        await new Promise(r => setTimeout(r, 680));
+
+        // Smooth flight of both played card and target cards into the capture pile (600ms)
+        await this.animateCaptureToPile(role, playedFlyEl, capturedCards);
+      } else {
+        // No capture: The card rests clearly visible on the green felt, then smoothly slides into place with the table cards
+        this.setNarrator('🌱', `${actorName} cala ${card.name}: resta sul tavolo`);
+        
+        // Pause on green space so it's clearly seen (650ms)
+        await new Promise(r => setTimeout(r, 650));
+        
+        // Smoothly slide the card from the green space into its target slot inside table-cards-field!
+        await this.animateCardJoinTable(playedFlyEl, card);
+      }
+
+      // 4. Actually execute card move in game engine
+      const result = this.engine.playCard(role, card.id, chosenOption);
+
+      // Update board with clean state
       this.updateBoard();
-    }
 
-    // 7. Check round over
-    if (result.isRoundOver) {
-      this.stopTurnTimer();
-      setTimeout(() => this.showRoundSummary(result.roundScoreResult), 1000);
-      return;
-    }
+      // Clean up flying card right as new table card is inserted
+      if (playedFlyEl && playedFlyEl.parentNode) {
+        playedFlyEl.remove();
+      }
 
-    // 8. Ready for next turn
-    this.isProcessing = false;
-    this.updateBoard();
+      // 5. Scopa celebration
+      if (result.isScopa) {
+        this.triggerScopaCelebration(isPlayer ? '✨ Hai fatto Scopa! (+1) ✨' : '🤖 La CPU ha fatto Scopa! (+1)');
+        await new Promise(r => setTimeout(r, 1200));
+      }
 
-    // Start 10-second timer for next turn
-    this.startTurnTimer(this.engine.currentTurn);
+      // 6. Check deal of new hands
+      if (result.dealtNewHands) {
+        soundFx.playDeal();
+        this.setNarrator('🎴', 'Nuova mano di 3 carte distribuita dal mazzo');
+        await new Promise(r => setTimeout(r, 600));
+        this.updateBoard();
+      }
 
-    if (this.engine.currentTurn === 'cpu') {
-      this.triggerCpuTurn();
-    } else {
-      this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
+      // 7. Check round over
+      if (result.isRoundOver) {
+        this.isProcessing = false;
+        this.stopTurnTimer();
+        setTimeout(() => this.showRoundSummary(result.roundScoreResult), 1000);
+        return;
+      }
+
+      // 8. Ready for next turn
+      this.isProcessing = false;
+      this.updateBoard();
+
+      // Start 10-second timer for next turn
+      this.startTurnTimer(this.engine.currentTurn);
+
+      if (this.engine.currentTurn === 'cpu') {
+        this.triggerCpuTurn();
+      } else {
+        this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
+      }
+    } catch (err) {
+      console.error('Errore durante playMoveSequence:', err);
+      this.isProcessing = false;
+      this.updateBoard();
+      this.startTurnTimer(this.engine.currentTurn);
+      if (this.engine.currentTurn === 'cpu') {
+        this.triggerCpuTurn();
+      } else {
+        this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
+      }
     }
   }
 
@@ -990,16 +1026,22 @@ export class ScopaView {
 
   // CPU Turn Execution
   triggerCpuTurn() {
+    if (this.cpuThinkingTimeout) {
+      clearTimeout(this.cpuThinkingTimeout);
+      this.cpuThinkingTimeout = null;
+    }
+
     if (this.engine.isRoundOver || this.engine.currentTurn !== 'cpu' || this.isProcessing) {
       return;
     }
 
     this.setNarrator('🤖', 'La CPU sta riflettendo sulla mossa...');
 
-    // Simulate thinking delay of 1.5s - 2.5s (timer ticks down visibly)
-    const thinkingTime = 1600 + Math.random() * 800;
+    // Simulate thinking delay of 1.2s - 2.0s (timer ticks down visibly)
+    const thinkingTime = 1200 + Math.random() * 800;
 
-    setTimeout(() => {
+    this.cpuThinkingTimeout = setTimeout(() => {
+      this.cpuThinkingTimeout = null;
       if (this.engine.currentTurn !== 'cpu' || this.engine.isRoundOver) return;
 
       const decision = ScopaAI.decideMove(this.engine.cpuHand, this.engine.tableCards, this.engine);
