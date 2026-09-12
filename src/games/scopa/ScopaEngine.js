@@ -336,4 +336,35 @@ export class ScopaEngine {
 
     return this.roundScoreResult;
   }
+
+  // Stato completo serializzabile: tutto ciò che serve a riprendere la partita
+  serialize() {
+    return {
+      targetScore: this.targetScore,
+      matchScore: this.matchScore,
+      roundNumber: this.roundNumber,
+      dealer: this.dealer,
+      currentTurn: this.currentTurn,
+      isMatchOver: this.isMatchOver,
+      matchWinner: this.matchWinner,
+      deck: this.deck,
+      tableCards: this.tableCards,
+      playerHand: this.playerHand,
+      cpuHand: this.cpuHand,
+      playerCaptures: this.playerCaptures,
+      cpuCaptures: this.cpuCaptures,
+      playerScope: this.playerScope,
+      cpuScope: this.cpuScope,
+      lastCapturer: this.lastCapturer,
+      isRoundOver: this.isRoundOver,
+      roundScoreResult: this.roundScoreResult
+    };
+  }
+
+  // Ricostruisce senza passare dal costruttore, che distribuirebbe una nuova smazzata
+  static deserialize(data) {
+    const engine = Object.create(ScopaEngine.prototype);
+    Object.assign(engine, JSON.parse(JSON.stringify(data)));
+    return engine;
+  }
 }
