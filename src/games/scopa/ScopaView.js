@@ -16,6 +16,13 @@ export class ScopaView {
     this.pendingMoves = [];
     this.lastProcessedMoveKey = null;
     this.currentTurnKey = null;
+    this.lastRenderedTableKey = null;
+    this.lastRenderedHandKey = null;
+    this.lastHandPlayableState = null;
+    this.lastRenderedCpuHandCount = null;
+    this.lastPlayerCaptureCount = null;
+    this.lastCpuCaptureCount = null;
+    this.hasRenderedTargetBadge = false;
     this.isSubmittingMove = false;
     this.isAnimatingQueue = false;
     this.timerSeconds = 10;
@@ -38,6 +45,13 @@ export class ScopaView {
     this.pendingMoves = [];
     this.lastProcessedMoveKey = null;
     this.currentTurnKey = null;
+    this.lastRenderedTableKey = null;
+    this.lastRenderedHandKey = null;
+    this.lastHandPlayableState = null;
+    this.lastRenderedCpuHandCount = null;
+    this.lastPlayerCaptureCount = null;
+    this.lastCpuCaptureCount = null;
+    this.hasRenderedTargetBadge = false;
     this.isSubmittingMove = false;
     this.isAnimatingQueue = false;
     document.querySelectorAll('.flying-card-live').forEach(el => el.remove());
@@ -590,39 +604,56 @@ export class ScopaView {
 
     // Aggiornamento nomi e avatar avversario
     const oppName = document.getElementById('opponent-name');
-    if (oppName) oppName.textContent = this.view.opponent.username;
+    if (oppName && oppName.textContent !== this.view.opponent.username) {
+      oppName.textContent = this.view.opponent.username;
+    }
 
     const oppIcon = document.getElementById('opponent-avatar-icon');
-    if (oppIcon) oppIcon.textContent = this.view.mode === 'local' ? '🤖' : '👤';
+    const newIcon = this.view.mode === 'local' ? '🤖' : '👤';
+    if (oppIcon && oppIcon.textContent !== newIcon) {
+      oppIcon.textContent = newIcon;
+    }
 
     const oppLabel = document.getElementById('cpu-label');
-    if (oppLabel) oppLabel.textContent = this.view.mode === 'local' ? 'CPU' : this.view.opponent.username;
+    const newOppLabel = this.view.mode === 'local' ? 'CPU' : this.view.opponent.username;
+    if (oppLabel && oppLabel.textContent !== newOppLabel) {
+      oppLabel.textContent = newOppLabel;
+    }
 
     const oppSub = document.getElementById('cpu-scope-count');
-    if (oppSub) oppSub.textContent = `Scope: ${this.view.opponent.scope}`;
+    const newOppSub = `Scope: ${this.view.opponent.scope}`;
+    if (oppSub && oppSub.textContent !== newOppSub) {
+      oppSub.textContent = newOppSub;
+    }
 
     // Scores
     const pScoreEl = document.getElementById('score-player');
     const cScoreEl = document.getElementById('score-cpu');
-    if (pScoreEl) pScoreEl.textContent = this.view.you.matchScore;
-    if (cScoreEl) cScoreEl.textContent = this.view.opponent.matchScore;
+    const newPScore = String(this.view.you.matchScore);
+    const newCScore = String(this.view.opponent.matchScore);
+    if (pScoreEl && pScoreEl.textContent !== newPScore) pScoreEl.textContent = newPScore;
+    if (cScoreEl && cScoreEl.textContent !== newCScore) cScoreEl.textContent = newCScore;
 
     // Scope counts
     const pScopeEl = document.getElementById('player-scope-count');
-    if (pScopeEl) pScopeEl.textContent = `Scope: ${this.view.you.scope}`;
+    const newPScope = `Scope: ${this.view.you.scope}`;
+    if (pScopeEl && pScopeEl.textContent !== newPScope) pScopeEl.textContent = newPScope;
 
     // Deck Count
     const deckCountEl = document.getElementById('deck-counter');
     const deckStackEl = document.getElementById('deck-stack');
-    if (deckCountEl) deckCountEl.textContent = `Mazzo: ${this.view.deckCount}`;
+    const newDeckText = `Mazzo: ${this.view.deckCount}`;
+    if (deckCountEl && deckCountEl.textContent !== newDeckText) deckCountEl.textContent = newDeckText;
     if (deckStackEl) {
-      deckStackEl.style.opacity = this.view.deckCount > 0 ? '1' : '0.2';
+      const newOpacity = this.view.deckCount > 0 ? '1' : '0.2';
+      if (deckStackEl.style.opacity !== newOpacity) deckStackEl.style.opacity = newOpacity;
     }
 
     // Target badge
     const targetBadge = document.getElementById('target-badge');
-    if (targetBadge && this.match?.targetScore) {
+    if (targetBadge && this.match?.targetScore && !this.hasRenderedTargetBadge) {
       targetBadge.innerHTML = `<span class="target-label">Obiettivo: </span>${this.match.targetScore} pt`;
+      this.hasRenderedTargetBadge = true;
     }
 
     // Multiplayer controls
@@ -644,37 +675,47 @@ export class ScopaView {
   }
 
   updateCapturePiles() {
-    const pPileStack = document.getElementById('player-pile-stack');
-    const cPileStack = document.getElementById('cpu-pile-stack');
+    const pCount = this.view.you.captureCount || 0;
+    const cCount = this.view.opponent.captureCount || 0;
+
     const pPileCount = document.getElementById('player-pile-count');
     const cPileCount = document.getElementById('cpu-pile-count');
+    const newPCount = `Prese: ${pCount}`;
+    const newCCount = `Prese: ${cCount}`;
+    if (pPileCount && pPileCount.textContent !== newPCount) pPileCount.textContent = newPCount;
+    if (cPileCount && cPileCount.textContent !== newCCount) cPileCount.textContent = newCCount;
 
-    if (pPileCount) pPileCount.textContent = `Prese: ${this.view.you.captureCount}`;
-    if (cPileCount) cPileCount.textContent = `Prese: ${this.view.opponent.captureCount}`;
-
-    if (pPileStack) {
-      if (this.view.you.captureCount > 0) {
-        pPileStack.innerHTML = `
-          <div class="captured-card-top">
-            ${renderCardBackSvg()}
-            <div class="pile-badge">${this.view.you.captureCount}</div>
-          </div>
-        `;
-      } else {
-        pPileStack.innerHTML = '<div class="empty-pile-placeholder">0</div>';
+    if (this.lastPlayerCaptureCount !== pCount) {
+      this.lastPlayerCaptureCount = pCount;
+      const pPileStack = document.getElementById('player-pile-stack');
+      if (pPileStack) {
+        if (pCount > 0) {
+          pPileStack.innerHTML = `
+            <div class="captured-card-top">
+              ${renderCardBackSvg()}
+              <div class="pile-badge">${pCount}</div>
+            </div>
+          `;
+        } else {
+          pPileStack.innerHTML = '<div class="empty-pile-placeholder">0</div>';
+        }
       }
     }
 
-    if (cPileStack) {
-      if (this.view.opponent.captureCount > 0) {
-        cPileStack.innerHTML = `
-          <div class="captured-card-top">
-            ${renderCardBackSvg()}
-            <div class="pile-badge">${this.view.opponent.captureCount}</div>
-          </div>
-        `;
-      } else {
-        cPileStack.innerHTML = '<div class="empty-pile-placeholder">0</div>';
+    if (this.lastCpuCaptureCount !== cCount) {
+      this.lastCpuCaptureCount = cCount;
+      const cPileStack = document.getElementById('cpu-pile-stack');
+      if (cPileStack) {
+        if (cCount > 0) {
+          cPileStack.innerHTML = `
+            <div class="captured-card-top">
+              ${renderCardBackSvg()}
+              <div class="pile-badge">${cCount}</div>
+            </div>
+          `;
+        } else {
+          cPileStack.innerHTML = '<div class="empty-pile-placeholder">0</div>';
+        }
       }
     }
   }
@@ -683,12 +724,19 @@ export class ScopaView {
     const field = document.getElementById('table-cards-field');
     if (!field) return;
 
-    if (!this.view.tableCards || this.view.tableCards.length === 0) {
+    const tableCards = this.view.tableCards || [];
+    const tableKey = tableCards.map(c => c.id).join(',');
+    if (this.lastRenderedTableKey === tableKey) {
+      return;
+    }
+    this.lastRenderedTableKey = tableKey;
+
+    if (tableCards.length === 0) {
       field.innerHTML = '<div class="empty-table-msg">Il tavolo è sgombro</div>';
       return;
     }
 
-    field.innerHTML = this.view.tableCards.map((card, idx) => {
+    field.innerHTML = tableCards.map((card, idx) => {
       const rotation = ((card.value * 5 + idx * 7) % 7) - 3;
       return `
         <div class="card-wrapper table-card" 
@@ -706,6 +754,11 @@ export class ScopaView {
     if (!container) return;
 
     const count = this.view.opponent.handCount || 0;
+    if (this.lastRenderedCpuHandCount === count) {
+      return;
+    }
+    this.lastRenderedCpuHandCount = count;
+
     container.innerHTML = Array.from({ length: count }).map((_, idx) => {
       const rot = (idx - (count - 1) / 2) * 2.5;
       return `
@@ -721,10 +774,27 @@ export class ScopaView {
     if (!container) return;
 
     const hand = this.view.you.hand || [];
+    const handKey = hand.map(c => c.id).join(',');
+    const isTurn = this.view.isYourTurn && !this.isSubmittingMove && !this.isAnimatingQueue;
+
+    if (this.lastRenderedHandKey === handKey) {
+      if (this.lastHandPlayableState !== isTurn) {
+        this.lastHandPlayableState = isTurn;
+        container.querySelectorAll('.player-card').forEach(btn => {
+          btn.classList.toggle('card-playable', isTurn);
+          btn.classList.toggle('card-disabled', !isTurn);
+          btn.disabled = !isTurn;
+        });
+      }
+      return;
+    }
+
+    this.lastRenderedHandKey = handKey;
+    this.lastHandPlayableState = isTurn;
+
     container.innerHTML = hand.map((card, idx) => {
       const total = hand.length;
       const rot = (idx - (total - 1) / 2) * 2.5;
-      const isTurn = this.view.isYourTurn && !this.isSubmittingMove && !this.isAnimatingQueue;
 
       return `
         <button class="card-wrapper player-card ${isTurn ? 'card-playable' : 'card-disabled'}" 

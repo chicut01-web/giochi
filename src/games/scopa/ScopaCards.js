@@ -135,7 +135,7 @@ export function renderCardSvg(card, isFaceUp = true) {
 
   return `
     <div class="card-face ${isSettebello ? 'is-settebello' : ''}" title="${name}">
-      <img src="${image}" alt="${name}" class="italian-card-img" draggable="false" loading="eager" />
+      <img src="${image}" alt="${name}" class="italian-card-img" draggable="false" loading="eager" decoding="async" />
       <span class="card-value-indicator">${value}</span>
       ${isSettebello ? '<div class="settebello-tag">★ SETTEBELLO ★</div>' : ''}
     </div>

@@ -590,4 +590,11 @@ export class LobbyView {
       activeBox.innerHTML = '';
     }
   }
+
+  cleanup() {
+    if (this.friendsUnsub) {
+      this.friendsUnsub();
+      this.friendsUnsub = null;
+    }
+  }
 }

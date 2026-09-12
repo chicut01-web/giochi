@@ -21,6 +21,9 @@ function renderCurrentView(viewName, params = {}) {
   if (viewName !== 'scopa' && scopaView) {
     scopaView.cleanup();
   }
+  if (viewName !== 'lobby' && lobbyView) {
+    lobbyView.cleanup();
+  }
 
   if (viewName === 'auth') {
     if (!authView) {
