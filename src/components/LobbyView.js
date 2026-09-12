@@ -11,6 +11,7 @@ export class LobbyView {
     this.container = container;
     this.pwaUnsub = null;
     this.friendsUnsub = null;
+    this.joinedSessionId = null;
     this.authUnsub = authManager.onAuthChange(() => {
       if (gameManager.getView() === 'lobby') {
         this.render();
@@ -334,6 +335,16 @@ export class LobbyView {
       // Render incoming game challenge banner
       const challengesBox = document.getElementById('lobby-challenges-container');
       if (challengesBox) {
+        // Chi ha lanciato la sfida entra appena l'altro accetta, oppure ripresa partita attiva
+        if (!this.joinedSessionId) {
+          friendsManager.findActiveSession().then(sessionId => {
+            if (sessionId && gameManager.getView() === 'lobby') {
+              this.joinedSessionId = sessionId;
+              gameManager.setView('scopa', { sessionId });
+            }
+          });
+        }
+
         if (state.incomingInvites.length === 0) {
           challengesBox.innerHTML = '';
         } else {
@@ -362,8 +373,17 @@ export class LobbyView {
               const invId = btn.getAttribute('data-invite-id');
               soundFx.playWin();
               btn.disabled = true;
-              await friendsManager.respondToGameInvite(invId, true);
-              gameManager.setView('scopa');
+              btn.innerHTML = '<span>Avvio partita...</span>';
+
+              try {
+                const sessionId = await friendsManager.acceptGameInvite(invId);
+                this.joinedSessionId = sessionId;
+                gameManager.setView('scopa', { sessionId });
+              } catch (err) {
+                alert(err.message || 'Impossibile avviare la partita.');
+                btn.disabled = false;
+                btn.innerHTML = '<span>Accetta e Gioca</span>';
+              }
             });
           });
 

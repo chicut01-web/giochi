@@ -506,6 +506,48 @@ class FriendsManager {
     return true;
   }
 
+  /**
+   * Accetta una sfida: la Edge Function crea la partita e restituisce il suo id
+   */
+  async acceptGameInvite(inviteId) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Devi aver effettuato l\'accesso.');
+
+    const { data, error } = await supabase.functions.invoke('scopa', {
+      body: { action: 'create', inviteId },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (error || !data?.sessionId) {
+      console.error('[FriendsManager] Creazione partita fallita:', error);
+      throw new Error(data?.error || 'Impossibile avviare la partita. Riprova.');
+    }
+
+    await this.refreshAll();
+    return data.sessionId;
+  }
+
+  /**
+   * Partita già in corso da riprendere (riapertura dell'app, sfida accettata
+   * dall'altro mentre eri nella lobby)
+   */
+  async findActiveSession() {
+    const user = authManager.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('game_sessions')
+      .select('id')
+      .eq('status', 'active')
+      .or(`player_a.eq.${user.id},player_b.eq.${user.id}`)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (error || !data || data.length === 0) return null;
+    return data[0].id;
+  }
+
   subscribe(callback) {
     this.listeners.add(callback);
     // Initial emit
