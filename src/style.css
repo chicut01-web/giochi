@@ -3361,5 +3361,39 @@ dialog[open]::backdrop {
   justify-content: flex-end;
 }
 
+/* Multiplayer Online Controls */
+.abandon-match-btn {
+  background: rgba(180, 40, 40, 0.85);
+  color: #fff;
+  border: 1px solid rgba(255, 100, 100, 0.4);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
 
+.abandon-match-btn:hover {
+  background: rgba(210, 45, 45, 0.95);
+  transform: scale(1.03);
+}
 
+.abandon-match-btn:active {
+  transform: scale(0.97);
+}
+
+.reconnect-notice {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f0c060;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  animation: pulse-glow 1.5s infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}

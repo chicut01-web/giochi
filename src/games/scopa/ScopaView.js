@@ -1,5 +1,6 @@
 import { ScopaEngine } from './ScopaEngine.js';
-import { ScopaAI } from './ScopaAI.js';
+import { LocalMatchController } from './LocalMatchController.js';
+import { OnlineMatchController } from './OnlineMatchController.js';
 import { renderCardSvg, renderCardBackSvg } from './ScopaCards.js';
 import { soundFx } from '../../core/SoundFx.js';
 import { gameManager } from '../../core/GameManager.js';
@@ -9,12 +10,32 @@ import { authModal } from '../../components/AuthModal.js';
 export class ScopaView {
   constructor(container) {
     this.container = container;
-    this.engine = null;
+    this.match = null;
+    this.view = null;
+    this.unsubscribe = null;
+    this.pendingMoves = [];
+    this.lastQueuedMove = null;
     this.isProcessing = false;
     this.timerSeconds = 10;
     this.timerInterval = null;
     this.timerRole = null;
-    this.cpuThinkingTimeout = null;
+    this.isTimerPaused = false;
+  }
+
+  cleanup() {
+    this.stopTurnTimer();
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
+    if (this.match) {
+      this.match.destroy();
+      this.match = null;
+    }
+    this.view = null;
+    this.pendingMoves = [];
+    this.lastQueuedMove = null;
+    this.isProcessing = false;
   }
 
   init(options = {}) {
@@ -31,22 +52,116 @@ export class ScopaView {
     }
 
     const target = options.targetScore || gameManager.settings.targetPoints || 11;
-    this.stopTurnTimer();
-    this.engine = new ScopaEngine({ targetScore: target });
-    this.isProcessing = false;
-    this.renderLayout();
-    this.updateBoard();
+    this.cleanup();
 
-    // Start turn sequence
-    this.startTurnTimer(this.engine.currentTurn);
-    if (this.engine.currentTurn === 'cpu') {
-      this.triggerCpuTurn();
+    this.match = options.sessionId
+      ? new OnlineMatchController({ sessionId: options.sessionId })
+      : new LocalMatchController({
+          targetScore: target,
+          username: authManager.getNickname() || 'Tu'
+        });
+
+    this.isProcessing = false;
+    this.unsubscribe = this.match.onChange(view => this.onMatchUpdate(view));
+    this.renderLayout();
+    this.match.start();
+  }
+
+  onMatchUpdate(view) {
+    this.view = view;
+    if (!view) return;
+
+    // Se la partita è stata abbandonata da un giocatore
+    if (view.status === 'abandoned') {
+      this.stopTurnTimer();
+      this.isProcessing = false;
+      const isWinner = view.matchWinnerSeat === view.you.seat;
+      this.showAbandonedModal(isWinner);
+      return;
+    }
+
+    // Le mosse vanno accodate, non disegnate appena arrivano: il computer
+    // gioca dopo 900ms mentre l'animazione precedente dura circa 1,5s, e
+    // online possono arrivare due aggiornamenti ravvicinati.
+    if (view.lastMove && view.lastMove !== this.lastQueuedMove) {
+      this.lastQueuedMove = view.lastMove;
+      this.pendingMoves.push(view.lastMove);
+      this.drainMoveQueue();
+      return;
+    }
+
+    if (this.isProcessing) return;
+    this.updateBoard();
+    this.syncTurnState();
+  }
+
+  async drainMoveQueue() {
+    if (this.isProcessing) return;
+
+    while (this.pendingMoves.length > 0) {
+      const move = this.pendingMoves.shift();
+      await this.playMoveSequence(move);
+      if (this.view && this.view.isRoundOver) return;
+    }
+
+    this.syncTurnState();
+  }
+
+  syncTurnState() {
+    if (!this.view || this.view.status !== 'active') return;
+
+    if (this.view.isRoundOver) {
+      this.stopTurnTimer();
+      return;
+    }
+
+    this.startTurnTimer(this.view.isYourTurn ? 'player' : 'cpu');
+
+    if (this.view.isYourTurn) {
+      this.setNarrator('👤', `È il tuo turno: seleziona una carta da giocare (${this.view.turnSeconds}s)`);
     } else {
-      this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
+      this.setNarrator(
+        this.view.mode === 'local' ? '🤖' : '👤',
+        `Turno di ${this.view.opponent.username}...`
+      );
     }
   }
 
+  showAbandonedModal(isWinner) {
+    const existing = document.getElementById('abandon-result-dialog');
+    if (existing) existing.remove();
+
+    const dialog = document.createElement('dialog');
+    dialog.id = 'abandon-result-dialog';
+    dialog.className = 'app-dialog';
+    dialog.innerHTML = `
+      <div class="dialog-content">
+        <h2 class="dialog-title ${isWinner ? 'winner-title' : 'loser-title'}">
+          ${isWinner ? '🏆 Vittoria a Tavolino!' : 'Partita Terminata'}
+        </h2>
+        <p class="dialog-desc">
+          ${isWinner 
+            ? `${this.view?.opponent?.username || 'L\'avversario'} ha abbandonato la partita. Hai vinto!` 
+            : 'Hai abbandonato la partita.'}
+        </p>
+        <div class="modal-actions">
+          <button class="primary-btn" id="abandon-back-lobby-btn">Torna alla Lobby</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dialog);
+    dialog.showModal();
+
+    document.getElementById('abandon-back-lobby-btn')?.addEventListener('click', () => {
+      dialog.close();
+      dialog.remove();
+      this.cleanup();
+      gameManager.setView('lobby');
+    });
+  }
+
   renderLayout() {
+    const target = this.match?.targetScore || gameManager.settings.targetPoints || 11;
     this.container.innerHTML = `
       <div class="scopa-arena" id="scopa-arena">
         <!-- Top Navigation, Score Bar, and Turn Timer -->
@@ -58,19 +173,19 @@ export class ScopaView {
 
           <div class="scoreboard-pill">
             <div class="score-team player-team">
-              <span class="team-label">Tu</span>
+              <span class="team-label" id="player-label">Tu</span>
               <span class="team-score" id="score-player">0</span>
             </div>
             <div class="score-divider">
-              <span class="target-badge" id="target-badge"><span class="target-label">Obiettivo: </span>${this.engine.targetScore} pt</span>
+              <span class="target-badge" id="target-badge"><span class="target-label">Obiettivo: </span>${target} pt</span>
             </div>
             <div class="score-team cpu-team">
               <span class="team-score" id="score-cpu">0</span>
-              <span class="team-label">CPU</span>
+              <span class="team-label" id="cpu-label">CPU</span>
             </div>
           </div>
 
-          <!-- 10-Second Turn Timer Pill -->
+          <!-- 10/25-Second Turn Timer Pill -->
           <div class="turn-timer-pill" id="turn-timer-pill" title="Tempo rimanente per la giocata">
             <div class="timer-circle-wrap">
               <svg viewBox="0 0 36 36" class="timer-svg">
@@ -81,11 +196,13 @@ export class ScopaView {
             </div>
             <div class="timer-info">
               <span class="timer-role" id="timer-role">Turno Tuo</span>
-              <span class="timer-sub">10s max</span>
+              <span class="timer-sub" id="timer-sub-seconds">10s max</span>
             </div>
           </div>
 
           <div class="header-actions">
+            <button class="abandon-match-btn hidden" id="abandon-match-btn" title="Abbandona la partita">Abbandona</button>
+            <span class="reconnect-notice hidden" id="reconnect-notice">Riconnessione…</span>
             <button class="scopa-btn icon-btn" id="scopa-sound-btn" title="Attiva/Disattiva Audio">
               <span id="sound-icon">${soundFx.isMuted() ? '🔇' : '🔊'}</span>
             </button>
@@ -98,21 +215,21 @@ export class ScopaView {
 
         <!-- Main Felt Table -->
         <main class="felt-table" id="felt-table">
-          <!-- CPU Zone -->
+          <!-- Opponent Zone (CPU or Friend) -->
           <div class="player-zone cpu-zone">
             <div class="avatar-badge">
-              <div class="avatar-icon cpu-avatar">🤖</div>
+              <div class="avatar-icon cpu-avatar" id="opponent-avatar-icon">🤖</div>
               <div class="avatar-info">
-                <span class="avatar-name">CPU Master</span>
+                <span class="avatar-name" id="opponent-name">CPU Master</span>
                 <span class="avatar-sub" id="cpu-scope-count">Scope: 0</span>
               </div>
             </div>
 
             <div class="hand-container cpu-hand" id="cpu-hand">
-              <!-- CPU Cards Face Down -->
+              <!-- Opponent Cards Face Down -->
             </div>
 
-            <div class="capture-pile cpu-pile" id="cpu-pile" title="Mazzo prese CPU">
+            <div class="capture-pile cpu-pile" id="cpu-pile" title="Mazzo prese avversario">
               <div class="pile-card-stack" id="cpu-pile-stack">
                 <div class="empty-pile-placeholder">0</div>
               </div>
@@ -157,7 +274,7 @@ export class ScopaView {
             <div class="avatar-badge">
               <div class="avatar-icon user-avatar">👤</div>
               <div class="avatar-info">
-                <span class="avatar-name">${authManager.getNickname() || 'Giocatore'}</span>
+                <span class="avatar-name" id="player-name">${authManager.getNickname() || 'Tu'}</span>
                 <span class="avatar-sub" id="player-scope-count">Scope: 0</span>
               </div>
             </div>
@@ -210,7 +327,7 @@ export class ScopaView {
             <div class="rules-body">
               <section>
                 <h4>Obiettivo & Tempo di Turno</h4>
-                <p>Cattura le carte sul tavolo abbinando una carta della tua mano. Ogni giocatore ha <strong>10 secondi</strong> a disposizione per effettuare la giocata. Se il tempo scade, viene eseguita una mossa automatica.</p>
+                <p>Cattura le carte sul tavolo abbinando una carta della tua mano. Ogni giocatore ha un tempo limite per effettuare la giocata (10s locale, 25s online). Se il tempo scade, viene eseguita una mossa automatica.</p>
               </section>
               <section>
                 <h4>Regole di Presa Ufficiali</h4>
@@ -247,7 +364,16 @@ export class ScopaView {
   attachEventListeners() {
     // Back to Lobby
     document.getElementById('scopa-back-btn')?.addEventListener('click', () => {
-      this.stopTurnTimer();
+      this.cleanup();
+      gameManager.setView('lobby');
+    });
+
+    // Abandon match button (multiplayer online)
+    document.getElementById('abandon-match-btn')?.addEventListener('click', async () => {
+      if (!confirm('Vuoi abbandonare la partita? Il tuo avversario vincerà a tavolino.')) return;
+      soundFx.playSnap();
+      await this.match?.concede();
+      this.cleanup();
       gameManager.setView('lobby');
     });
 
@@ -273,24 +399,18 @@ export class ScopaView {
     });
 
     // Next Round Button
-    document.getElementById('next-round-btn')?.addEventListener('click', () => {
+    document.getElementById('next-round-btn')?.addEventListener('click', async () => {
       const dialog = document.getElementById('round-score-dialog');
       dialog?.close();
       this.isProcessing = false;
       this.stopTurnTimer();
 
-      if (this.engine.isMatchOver) {
+      if (this.view?.isMatchOver) {
+        this.cleanup();
         gameManager.setView('lobby');
       } else {
-        this.engine.initRound();
         soundFx.playDeal();
-        this.updateBoard();
-        this.startTurnTimer(this.engine.currentTurn);
-        if (this.engine.currentTurn === 'cpu') {
-          this.triggerCpuTurn();
-        } else {
-          this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
-        }
+        await this.match?.nextRound();
       }
     });
 
@@ -308,24 +428,26 @@ export class ScopaView {
   }
 
   /* =========================================================================
-     10-SECOND TURN TIMER MANAGEMENT
+     TURN TIMER MANAGEMENT
      ========================================================================= */
 
   startTurnTimer(role) {
     this.stopTurnTimer();
-    if (this.engine.isRoundOver || this.engine.isMatchOver) return;
+    if (!this.view || this.view.isRoundOver || this.view.isMatchOver) return;
 
     this.timerRole = role;
-    this.timerSeconds = 10;
+    this.timerSeconds = this.view.turnSeconds || 10;
     this.updateTimerDisplay();
 
     this.timerInterval = setInterval(() => {
+      if (this.isTimerPaused) return;
+
       this.timerSeconds -= 1;
       this.updateTimerDisplay();
 
       if (this.timerSeconds <= 0) {
         this.stopTurnTimer();
-        this.onTimerExpired(role);
+        this.onTimerExpired();
       }
     }, 1000);
   }
@@ -334,10 +456,6 @@ export class ScopaView {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
-    }
-    if (this.cpuThinkingTimeout) {
-      clearTimeout(this.cpuThinkingTimeout);
-      this.cpuThinkingTimeout = null;
     }
   }
 
@@ -354,56 +472,35 @@ export class ScopaView {
     const fillEl = document.getElementById('timer-fill');
     const roleEl = document.getElementById('timer-role');
     const pillEl = document.getElementById('turn-timer-pill');
+    const subSecEl = document.getElementById('timer-sub-seconds');
     if (!secEl || !fillEl || !pillEl) return;
 
+    const maxSec = this.view?.turnSeconds || 10;
+    if (subSecEl) subSecEl.textContent = `${maxSec}s max`;
+
     secEl.textContent = Math.max(0, this.timerSeconds);
-    const pct = Math.max(0, (this.timerSeconds / 10) * 100);
+    const pct = Math.max(0, (this.timerSeconds / maxSec) * 100);
     fillEl.setAttribute('stroke-dasharray', `${pct}, 100`);
 
     if (this.timerRole === 'player') {
       roleEl.textContent = 'Turno Tuo';
       pillEl.className = `turn-timer-pill timer-player ${this.timerSeconds <= 3 ? 'timer-urgent' : ''}`;
     } else {
-      roleEl.textContent = 'Turno CPU';
+      const oppName = this.view?.mode === 'local' ? 'CPU' : (this.view?.opponent?.username || 'Avversario');
+      roleEl.textContent = `Turno ${oppName}`;
       pillEl.className = `turn-timer-pill timer-cpu ${this.timerSeconds <= 3 ? 'timer-urgent' : ''}`;
     }
   }
 
-  onTimerExpired(role) {
-    if (this.engine.isRoundOver || this.engine.isMatchOver) return;
+  onTimerExpired() {
+    if (!this.view || this.view.status !== 'active' || this.view.isRoundOver) return;
 
-    // The 10-second turn timer has expired.
-    // Unconditionally unlock isProcessing so the game can NEVER freeze at 0.
     this.isProcessing = false;
+    const choiceDialog = document.getElementById('capture-choice-dialog');
+    if (choiceDialog?.open) choiceDialog.close();
 
-    if (this.cpuThinkingTimeout) {
-      clearTimeout(this.cpuThinkingTimeout);
-      this.cpuThinkingTimeout = null;
-    }
-
-    if (role === 'player') {
-      this.setNarrator('⌛', 'Tempo scaduto! Mossa automatica...');
-      // Close choice dialog if open
-      const choiceDialog = document.getElementById('capture-choice-dialog');
-      if (choiceDialog?.open) choiceDialog.close();
-
-      // Auto decide move for player
-      const decision = ScopaAI.decideMove(this.engine.playerHand, this.engine.tableCards, this.engine);
-      if (decision && decision.card) {
-        this.playMoveSequence('player', decision.card, decision.chosenOption);
-      } else if (this.engine.playerHand && this.engine.playerHand.length > 0) {
-        this.playMoveSequence('player', this.engine.playerHand[0], null);
-      }
-    } else {
-      // CPU auto trigger: execute immediately without waiting
-      this.setNarrator('🤖', 'CPU effettua la giocata...');
-      const decision = ScopaAI.decideMove(this.engine.cpuHand, this.engine.tableCards, this.engine);
-      if (decision && decision.card) {
-        this.playMoveSequence('cpu', decision.card, decision.chosenOption);
-      } else if (this.engine.cpuHand && this.engine.cpuHand.length > 0) {
-        this.playMoveSequence('cpu', this.engine.cpuHand[0], null);
-      }
-    }
+    this.setNarrator('⌛', 'Tempo scaduto! Mossa automatica...');
+    this.match?.claimTimeout();
   }
 
   /* =========================================================================
@@ -411,27 +508,51 @@ export class ScopaView {
      ========================================================================= */
 
   updateBoard() {
-    if (!this.engine) return;
+    if (!this.view) return;
+
+    // Aggiornamento nomi e avatar avversario
+    const oppName = document.getElementById('opponent-name');
+    if (oppName) oppName.textContent = this.view.opponent.username;
+
+    const oppIcon = document.getElementById('opponent-avatar-icon');
+    if (oppIcon) oppIcon.textContent = this.view.mode === 'local' ? '🤖' : '👤';
+
+    const oppLabel = document.getElementById('cpu-label');
+    if (oppLabel) oppLabel.textContent = this.view.mode === 'local' ? 'CPU' : this.view.opponent.username;
+
+    const oppSub = document.getElementById('cpu-scope-count');
+    if (oppSub) oppSub.textContent = `Scope: ${this.view.opponent.scope}`;
 
     // Scores
     const pScoreEl = document.getElementById('score-player');
     const cScoreEl = document.getElementById('score-cpu');
-    if (pScoreEl) pScoreEl.textContent = this.engine.matchScore.player;
-    if (cScoreEl) cScoreEl.textContent = this.engine.matchScore.cpu;
+    if (pScoreEl) pScoreEl.textContent = this.view.you.matchScore;
+    if (cScoreEl) cScoreEl.textContent = this.view.opponent.matchScore;
 
     // Scope counts
     const pScopeEl = document.getElementById('player-scope-count');
-    const cScopeEl = document.getElementById('cpu-scope-count');
-    if (pScopeEl) pScopeEl.textContent = `Scope: ${this.engine.playerScope}`;
-    if (cScopeEl) cScopeEl.textContent = `Scope: ${this.engine.cpuScope}`;
+    if (pScopeEl) pScopeEl.textContent = `Scope: ${this.view.you.scope}`;
 
     // Deck Count
     const deckCountEl = document.getElementById('deck-counter');
     const deckStackEl = document.getElementById('deck-stack');
-    if (deckCountEl) deckCountEl.textContent = `Mazzo: ${this.engine.deck.length}`;
+    if (deckCountEl) deckCountEl.textContent = `Mazzo: ${this.view.deckCount}`;
     if (deckStackEl) {
-      deckStackEl.style.opacity = this.engine.deck.length > 0 ? '1' : '0.2';
+      deckStackEl.style.opacity = this.view.deckCount > 0 ? '1' : '0.2';
     }
+
+    // Target badge
+    const targetBadge = document.getElementById('target-badge');
+    if (targetBadge && this.match?.targetScore) {
+      targetBadge.innerHTML = `<span class="target-label">Obiettivo: </span>${this.match.targetScore} pt`;
+    }
+
+    // Multiplayer controls
+    const abandonBtn = document.getElementById('abandon-match-btn');
+    if (abandonBtn) abandonBtn.classList.toggle('hidden', this.view.mode !== 'online');
+
+    const notice = document.getElementById('reconnect-notice');
+    if (notice) notice.classList.toggle('hidden', this.view.connected !== false);
 
     // Capture piles
     this.updateCapturePiles();
@@ -450,15 +571,15 @@ export class ScopaView {
     const pPileCount = document.getElementById('player-pile-count');
     const cPileCount = document.getElementById('cpu-pile-count');
 
-    if (pPileCount) pPileCount.textContent = `Prese: ${this.engine.playerCaptures.length}`;
-    if (cPileCount) cPileCount.textContent = `Prese: ${this.engine.cpuCaptures.length}`;
+    if (pPileCount) pPileCount.textContent = `Prese: ${this.view.you.captureCount}`;
+    if (cPileCount) cPileCount.textContent = `Prese: ${this.view.opponent.captureCount}`;
 
     if (pPileStack) {
-      if (this.engine.playerCaptures.length > 0) {
+      if (this.view.you.captureCount > 0) {
         pPileStack.innerHTML = `
           <div class="captured-card-top">
             ${renderCardBackSvg()}
-            <div class="pile-badge">${this.engine.playerCaptures.length}</div>
+            <div class="pile-badge">${this.view.you.captureCount}</div>
           </div>
         `;
       } else {
@@ -467,11 +588,11 @@ export class ScopaView {
     }
 
     if (cPileStack) {
-      if (this.engine.cpuCaptures.length > 0) {
+      if (this.view.opponent.captureCount > 0) {
         cPileStack.innerHTML = `
           <div class="captured-card-top">
             ${renderCardBackSvg()}
-            <div class="pile-badge">${this.engine.cpuCaptures.length}</div>
+            <div class="pile-badge">${this.view.opponent.captureCount}</div>
           </div>
         `;
       } else {
@@ -484,12 +605,12 @@ export class ScopaView {
     const field = document.getElementById('table-cards-field');
     if (!field) return;
 
-    if (this.engine.tableCards.length === 0) {
+    if (!this.view.tableCards || this.view.tableCards.length === 0) {
       field.innerHTML = '<div class="empty-table-msg">Il tavolo è sgombro</div>';
       return;
     }
 
-    field.innerHTML = this.engine.tableCards.map((card, idx) => {
+    field.innerHTML = this.view.tableCards.map((card, idx) => {
       const rotation = ((card.value * 5 + idx * 7) % 7) - 3;
       return `
         <div class="card-wrapper table-card" 
@@ -506,8 +627,9 @@ export class ScopaView {
     const container = document.getElementById('cpu-hand');
     if (!container) return;
 
-    container.innerHTML = this.engine.cpuHand.map((card, idx) => {
-      const rot = (idx - (this.engine.cpuHand.length - 1) / 2) * 2.5;
+    const count = this.view.opponent.handCount || 0;
+    container.innerHTML = Array.from({ length: count }).map((_, idx) => {
+      const rot = (idx - (count - 1) / 2) * 2.5;
       return `
         <div class="card-wrapper cpu-card" style="transform: rotate(${rot}deg);">
           ${renderCardBackSvg()}
@@ -520,10 +642,11 @@ export class ScopaView {
     const container = document.getElementById('player-hand');
     if (!container) return;
 
-    container.innerHTML = this.engine.playerHand.map((card, idx) => {
-      const total = this.engine.playerHand.length;
+    const hand = this.view.you.hand || [];
+    container.innerHTML = hand.map((card, idx) => {
+      const total = hand.length;
       const rot = (idx - (total - 1) / 2) * 2.5;
-      const isTurn = this.engine.currentTurn === 'player' && !this.isProcessing;
+      const isTurn = this.view.isYourTurn && !this.isProcessing;
 
       return `
         <button class="card-wrapper player-card ${isTurn ? 'card-playable' : 'card-disabled'}" 
@@ -556,8 +679,8 @@ export class ScopaView {
      PLAYER INTERACTIONS & CAPTURE CHOICE
      ========================================================================= */
 
-  onPlayerCardClick(cardId) {
-    if (this.isProcessing || this.engine.currentTurn !== 'player' || this.engine.isRoundOver) {
+  async onPlayerCardClick(cardId) {
+    if (this.isProcessing || !this.view || !this.view.isYourTurn || this.view.isRoundOver) {
       return;
     }
 
@@ -565,10 +688,11 @@ export class ScopaView {
       try { navigator.vibrate(15); } catch (e) {}
     }
 
-    const card = this.engine.playerHand.find(c => c.id === cardId);
+    const card = this.view.you.hand.find(c => c.id === cardId);
     if (!card) return;
 
-    const captureOptions = this.engine.getCaptureOptions(card, this.engine.tableCards);
+    const probe = ScopaEngine.deserialize({ tableCards: this.view.tableCards });
+    const captureOptions = probe.getCaptureOptions(card, this.view.tableCards);
 
     // If multiple sum combinations exist, show selection dialog
     if (captureOptions.type === 'sum' && captureOptions.options.length > 1) {
@@ -578,7 +702,12 @@ export class ScopaView {
     }
 
     const chosenCombo = captureOptions.options.length > 0 ? captureOptions.options[0] : null;
-    this.playMoveSequence('player', card, chosenCombo);
+    this.isProcessing = true;
+    const res = await this.match.playCard(card.id, chosenCombo);
+    if (!res.ok) {
+      this.setNarrator('⚠️', 'Mossa non valida, riprova.');
+      this.isProcessing = false;
+    }
   }
 
   promptCaptureChoice(playedCard, options) {
@@ -603,11 +732,15 @@ export class ScopaView {
     }).join('');
 
     grid.querySelectorAll('.capture-choice-card').forEach(cardEl => {
-      cardEl.addEventListener('click', () => {
+      cardEl.addEventListener('click', async () => {
         const idx = parseInt(cardEl.getAttribute('data-option-idx'), 10);
         dialog.close();
-        this.isProcessing = false;
-        this.playMoveSequence('player', playedCard, options[idx]);
+        this.resumeTimer();
+        const res = await this.match.playCard(playedCard.id, options[idx]);
+        if (!res.ok) {
+          this.setNarrator('⚠️', 'Mossa non valida, riprova.');
+          this.isProcessing = false;
+        }
       });
     });
 
@@ -618,35 +751,24 @@ export class ScopaView {
      STEP-BY-STEP PLAY & CAPTURE ANIMATION SEQUENCE
      ========================================================================= */
 
-  async playMoveSequence(role, card, chosenOption = null) {
+  async playMoveSequence(lastMove) {
     this.stopTurnTimer();
     this.isProcessing = true;
 
     try {
-      // 1. Identify what capture will take place before modifying engine state
-      const captureInfo = this.engine.getCaptureOptions(card, this.engine.tableCards);
-      let capturedCards = [];
-
-      if (captureInfo.type !== 'none' && captureInfo.options.length > 0) {
-        if (chosenOption && Array.isArray(chosenOption)) {
-          capturedCards = chosenOption;
-        } else {
-          capturedCards = captureInfo.options[0];
-        }
-      }
-
+      const { seat, card, capturedCards, isScopa, dealtNewHands } = lastMove;
+      const isMine = seat === this.view.you.seat;
+      const actorName = isMine ? 'Tu' : this.view.opponent.username;
       const isCapture = capturedCards.length > 0;
-      const isPlayer = role === 'player';
-      const actorName = isPlayer ? 'Tu' : 'CPU';
+      const role = isMine ? 'player' : 'cpu';
 
-      this.setNarrator(isPlayer ? '👤' : '🤖', `${actorName} gioca ${card.name}...`);
+      this.setNarrator(isMine ? '👤' : (this.view.mode === 'local' ? '🤖' : '👤'), `${actorName} gioca ${card.name}...`);
 
-      // 2. Animate the played card moving smoothly onto the open green felt of the table
+      // 1. Animate card play
       const playedFlyEl = await this.animateCardPlay(role, card);
 
-      // 3. Comfortable pause on the green space so the card is clearly visible ("così si vede bene")
+      // 2. Animate capture or place on table
       if (isCapture) {
-        // Highlight captured cards on table with golden glow
         capturedCards.forEach(c => {
           const tableCardEl = document.getElementById(`table-card-${c.id}`);
           if (tableCardEl) {
@@ -657,7 +779,6 @@ export class ScopaView {
         const targetsDesc = capturedCards.map(c => c.name).join(' + ');
         this.setNarrator('🎯', `Presa! ${card.name} raccoglie ${targetsDesc}`);
 
-        // Sound & haptic feedback
         soundFx.playCapture();
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           try { navigator.vibrate(28); } catch (e) {}
@@ -666,78 +787,49 @@ export class ScopaView {
           soundFx.playCoin();
         }
 
-        // Generous pause to clearly see the played card and the highlighted captures (680ms)
         await new Promise(r => setTimeout(r, 680));
-
-        // Smooth flight of both played card and target cards into the capture pile (600ms)
         await this.animateCaptureToPile(role, playedFlyEl, capturedCards);
       } else {
-        // No capture: The card rests clearly visible on the green felt, then smoothly slides into place with the table cards
         this.setNarrator('🌱', `${actorName} cala ${card.name}: resta sul tavolo`);
-        
-        // Pause on green space so it's clearly seen (650ms)
         await new Promise(r => setTimeout(r, 650));
-        
-        // Smoothly slide the card from the green space into its target slot inside table-cards-field!
         await this.animateCardJoinTable(playedFlyEl, card);
       }
 
-      // 4. Actually execute card move in game engine
-      const result = this.engine.playCard(role, card.id, chosenOption);
-
-      // Update board with clean state
+      // 3. Update board with fresh state
       this.updateBoard();
 
-      // Clean up flying card right as new table card is inserted
       if (playedFlyEl && playedFlyEl.parentNode) {
         playedFlyEl.remove();
       }
 
-      // 5. Scopa celebration
-      if (result.isScopa) {
-        this.triggerScopaCelebration(isPlayer ? '✨ Hai fatto Scopa! (+1) ✨' : '🤖 La CPU ha fatto Scopa! (+1)');
+      // 4. Scopa celebration
+      if (isScopa) {
+        this.triggerScopaCelebration(isMine ? '✨ Hai fatto Scopa! (+1) ✨' : `✨ ${actorName} ha fatto Scopa! (+1) ✨`);
         await new Promise(r => setTimeout(r, 1200));
       }
 
-      // 6. Check deal of new hands
-      if (result.dealtNewHands) {
+      // 5. Deal new hands notice
+      if (dealtNewHands) {
         soundFx.playDeal();
         this.setNarrator('🎴', 'Nuova mano di 3 carte distribuita dal mazzo');
         await new Promise(r => setTimeout(r, 600));
         this.updateBoard();
       }
 
-      // 7. Check round over
-      if (result.isRoundOver) {
-        this.isProcessing = false;
-        this.stopTurnTimer();
-        setTimeout(() => this.showRoundSummary(result.roundScoreResult), 1000);
-        return;
-      }
-
-      // 8. Ready for next turn
+      // 6. Round over check
       this.isProcessing = false;
       this.updateBoard();
 
-      // Start 10-second timer for next turn
-      this.startTurnTimer(this.engine.currentTurn);
-
-      if (this.engine.currentTurn === 'cpu') {
-        this.triggerCpuTurn();
-      } else {
-        this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
+      if (this.view.isRoundOver) {
+        this.stopTurnTimer();
+        setTimeout(() => this.showRoundSummary(this.view.roundResult), 1000);
+        return;
       }
     } catch (err) {
       console.error('Errore durante playMoveSequence:', err);
       this.isProcessing = false;
       document.querySelectorAll('.flying-card-live').forEach(el => el.remove());
       this.updateBoard();
-      this.startTurnTimer(this.engine.currentTurn);
-      if (this.engine.currentTurn === 'cpu') {
-        this.triggerCpuTurn();
-      } else {
-        this.setNarrator('👤', 'È il tuo turno: seleziona una carta da giocare (10s)');
-      }
     }
   }
 
@@ -781,7 +873,6 @@ export class ScopaView {
       };
     }
 
-    // Calculate position on the open green felt that NEVER overlaps existing table cards
     let targetX = centerRect.left + centerRect.width / 2 - cardWidth / 2;
     let targetY = centerRect.top + centerRect.height / 2 - cardHeight / 2;
 
@@ -796,24 +887,19 @@ export class ScopaView {
       const spaceAbove = minCardTop - centerRect.top;
 
       if (isPlayer) {
-        // Player: Land in front of the player on the green felt below the cards
         if (spaceBelow >= cardHeight * 0.7) {
           targetY = maxCardBottom + 10;
         } else if (maxCardRight + cardWidth + 14 < centerRect.right - 10) {
-          // Open green felt to the right of cards
           targetX = maxCardRight + 14;
           targetY = minCardTop;
         } else {
-          // Open green felt with clear depth separation
           targetY = maxCardBottom - cardHeight * 0.35;
           targetX = centerRect.left + centerRect.width / 2 - cardWidth / 2 + 25;
         }
       } else {
-        // CPU: Land on CPU's green felt above the cards
         if (spaceAbove >= cardHeight * 0.7) {
           targetY = minCardTop - cardHeight - 10;
         } else if (minCardLeft - cardWidth - 14 > centerRect.left + 50) {
-          // Open green felt to the left of cards
           targetX = minCardLeft - cardWidth - 14;
           targetY = minCardTop;
         } else {
@@ -823,7 +909,6 @@ export class ScopaView {
       }
     }
 
-    // Keep cleanly within table bounds
     targetX = Math.max(centerRect.left + 10, Math.min(targetX, centerRect.right - cardWidth - 10));
     targetY = Math.max(centerRect.top + 6, Math.min(targetY, centerRect.bottom - cardHeight - 6));
 
@@ -831,7 +916,6 @@ export class ScopaView {
     const dy = targetY - startRect.top;
     const landingRot = ((card.value * 4) % 5) - 2;
 
-    // Create flying card element
     const flyEl = document.createElement('div');
     flyEl.className = 'card-wrapper flying-card-live played-on-green-felt';
     flyEl.innerHTML = renderCardSvg(card, true);
@@ -844,7 +928,6 @@ export class ScopaView {
     soundFx.playSnap();
 
     if (isPlayer) {
-      // Player: arcs upward smoothly onto the open green space (520ms)
       const anim = flyEl.animate([
         { transform: 'translate(0, 0) scale(1) rotate(0deg)' },
         { 
@@ -862,7 +945,6 @@ export class ScopaView {
         new Promise(r => setTimeout(r, 580))
       ]);
     } else {
-      // CPU: flips smoothly down from top onto the green felt (540ms)
       const anim = flyEl.animate([
         { transform: 'translate(0, 0) scale(0.88) rotateY(180deg)', opacity: 0.8 },
         { 
@@ -882,7 +964,6 @@ export class ScopaView {
       ]);
     }
 
-    // Lock the card in its physical resting place on the green felt
     flyEl.style.left = `${targetX}px`;
     flyEl.style.top = `${targetY}px`;
     flyEl.style.transform = `rotate(${landingRot}deg)`;
@@ -907,7 +988,6 @@ export class ScopaView {
     const emptyMsg = tableField.querySelector('.empty-table-msg');
     if (emptyMsg) emptyMsg.style.display = 'none';
 
-    // Measure exact destination slot where this card will sit in table-cards-field
     const dummy = document.createElement('div');
     dummy.className = 'card-wrapper table-card';
     dummy.style.visibility = 'hidden';
@@ -923,11 +1003,10 @@ export class ScopaView {
     const slideDx = destRect.left - currentRect.left;
     const slideDy = destRect.top - currentRect.top;
 
-    const tableIdx = this.engine.tableCards.length;
+    const tableIdx = this.view?.tableCards?.length || 0;
     const finalRot = ((card.value * 5 + tableIdx * 7) % 7) - 3;
     const startRot = parseFloat(playedFlyEl.dataset.landingRot || 0);
 
-    // Smooth gentle slide from green space directly into the table cards row
     soundFx.playDeal();
     const slideAnim = playedFlyEl.animate([
       { 
@@ -965,12 +1044,10 @@ export class ScopaView {
 
     const elementsToFly = [];
 
-    // Include the played card that is resting on the green space
     if (playedFlyEl && playedFlyEl.parentNode) {
       elementsToFly.push(playedFlyEl);
     }
 
-    // Include target cards on the table
     capturedCards.forEach(c => {
       const tableCardEl = document.getElementById(`table-card-${c.id}`);
       if (tableCardEl) {
@@ -1021,61 +1098,16 @@ export class ScopaView {
 
     await Promise.all(animations);
 
-    // Clean up temporary flying clones
     elementsToFly.forEach(el => {
       if (el && el.parentNode) {
         el.remove();
       }
     });
 
-    // Trigger golden pile bounce animation
     if (pileEl) {
       pileEl.classList.add('pile-bump');
       setTimeout(() => pileEl.classList.remove('pile-bump'), 400);
     }
-  }
-
-  // CPU Turn Execution
-  triggerCpuTurn() {
-    if (this.cpuThinkingTimeout) {
-      clearTimeout(this.cpuThinkingTimeout);
-      this.cpuThinkingTimeout = null;
-    }
-
-    if (this.engine.isRoundOver || this.engine.isMatchOver) {
-      return;
-    }
-
-    if (this.engine.currentTurn !== 'cpu') {
-      return;
-    }
-
-    // If an animation, deal, or card sequence is currently in progress, retry in 120ms
-    // so the CPU turn is NEVER dropped!
-    if (this.isProcessing) {
-      this.cpuThinkingTimeout = setTimeout(() => this.triggerCpuTurn(), 120);
-      return;
-    }
-
-    this.setNarrator('🤖', 'La CPU sta riflettendo sulla mossa...');
-
-    // Simulate thinking delay of 1.2s - 2.0s (timer ticks down visibly)
-    const thinkingTime = 1200 + Math.random() * 800;
-
-    this.cpuThinkingTimeout = setTimeout(() => {
-      this.cpuThinkingTimeout = null;
-      if (this.engine.currentTurn !== 'cpu' || this.engine.isRoundOver || this.engine.isMatchOver) return;
-
-      // Force processing lock clear before starting move
-      this.isProcessing = false;
-
-      const decision = ScopaAI.decideMove(this.engine.cpuHand, this.engine.tableCards, this.engine);
-      if (decision && decision.card) {
-        this.playMoveSequence('cpu', decision.card, decision.chosenOption);
-      } else if (this.engine.cpuHand && this.engine.cpuHand.length > 0) {
-        this.playMoveSequence('cpu', this.engine.cpuHand[0], null);
-      }
-    }, thinkingTime);
   }
 
   // Scopa celebration fanfare
@@ -1100,15 +1132,19 @@ export class ScopaView {
     if (!scoreData) return;
     this.stopTurnTimer();
 
-    if (scoreData.isMatchOver) {
-      const won = scoreData.matchWinner === 'player';
-      if (won) soundFx.playWin();
+    const isMatchOver = scoreData.isMatchOver || this.view?.isMatchOver;
+    const playerWon = scoreData.isWinner !== null && scoreData.isWinner !== undefined 
+      ? scoreData.isWinner 
+      : (this.view?.matchWinnerSeat === this.view?.you?.seat);
+
+    if (isMatchOver) {
+      if (playerWon) soundFx.playWin();
       gameManager.recordScopaMatch({
-        won,
-        scopeMade: scoreData.scope.player,
-        gotSettebello: scoreData.settebello.player === 1,
-        gotPrimiera: scoreData.primiera.points.player === 1,
-        finalScore: scoreData.matchScore.player
+        won: playerWon,
+        scopeMade: scoreData.scope.you ?? scoreData.scope.player,
+        gotSettebello: (scoreData.settebello.points?.you ?? scoreData.settebello.points?.player) === 1,
+        gotPrimiera: (scoreData.primiera.points?.you ?? scoreData.primiera.points?.player) === 1,
+        finalScore: scoreData.matchScore.you ?? scoreData.matchScore.player
       });
     }
 
@@ -1118,13 +1154,14 @@ export class ScopaView {
     const nextBtn = document.getElementById('next-round-btn');
     if (!dialog || !tableContainer) return;
 
-    if (scoreData.isMatchOver) {
-      const playerWon = scoreData.matchWinner === 'player';
-      title.textContent = playerWon ? '🏆 Vittoria! Hai Vinto la Partita!' : 'Partita Terminata - Ha Vinto la CPU!';
+    const oppName = this.view?.mode === 'local' ? 'CPU' : (this.view?.opponent?.username || 'Avversario');
+
+    if (isMatchOver) {
+      title.textContent = playerWon ? '🏆 Vittoria! Hai Vinto la Partita!' : `Partita Terminata - Ha Vinto ${oppName}!`;
       title.className = `dialog-title ${playerWon ? 'winner-title' : 'loser-title'}`;
       if (nextBtn) nextBtn.textContent = 'Torna alla Lobby';
     } else {
-      title.textContent = `Fine Smazzata ${this.engine.roundNumber}`;
+      title.textContent = `Fine Smazzata ${this.view?.roundNumber || 1}`;
       title.className = 'dialog-title';
       if (nextBtn) nextBtn.textContent = 'Prossima Smazzata';
     }
@@ -1137,53 +1174,53 @@ export class ScopaView {
           <tr>
             <th>Punteggio</th>
             <th>Tu</th>
-            <th>CPU</th>
+            <th>${oppName}</th>
             <th>Punti Assegnati</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><strong>Carte</strong> (>20)</td>
-            <td>${carte.player}</td>
-            <td>${carte.cpu}</td>
-            <td><span class="pts-badge">${carte.points.player > carte.points.cpu ? 'Tu (+1)' : carte.points.cpu > carte.points.player ? 'CPU (+1)' : 'Parità (0)'}</span></td>
+            <td>${carte.you}</td>
+            <td>${carte.opponent}</td>
+            <td><span class="pts-badge">${carte.points.you > carte.points.opponent ? 'Tu (+1)' : carte.points.opponent > carte.points.you ? oppName + ' (+1)' : 'Parità (0)'}</span></td>
           </tr>
           <tr>
             <td><strong>Denari</strong> (>5)</td>
-            <td>${denari.player}</td>
-            <td>${denari.cpu}</td>
-            <td><span class="pts-badge">${denari.points.player > denari.points.cpu ? 'Tu (+1)' : denari.points.cpu > denari.points.player ? 'CPU (+1)' : 'Parità (0)'}</span></td>
+            <td>${denari.you}</td>
+            <td>${denari.opponent}</td>
+            <td><span class="pts-badge">${denari.points.you > denari.points.opponent ? 'Tu (+1)' : denari.points.opponent > denari.points.you ? oppName + ' (+1)' : 'Parità (0)'}</span></td>
           </tr>
           <tr>
             <td><strong>Settebello</strong> (7 Denari)</td>
-            <td>${settebello.player ? '⭐ Preso' : '—'}</td>
-            <td>${settebello.cpu ? '⭐ Preso' : '—'}</td>
-            <td><span class="pts-badge">${settebello.points.player ? 'Tu (+1)' : 'CPU (+1)'}</span></td>
+            <td>${settebello.you ? '⭐ Preso' : '—'}</td>
+            <td>${settebello.opponent ? '⭐ Preso' : '—'}</td>
+            <td><span class="pts-badge">${settebello.points.you ? 'Tu (+1)' : settebello.points.opponent ? oppName + ' (+1)' : '—'}</span></td>
           </tr>
           <tr>
             <td><strong>Primiera</strong></td>
-            <td>${primiera.player} pt</td>
-            <td>${primiera.cpu} pt</td>
-            <td><span class="pts-badge">${primiera.points.player > primiera.points.cpu ? 'Tu (+1)' : primiera.points.cpu > primiera.points.player ? 'CPU (+1)' : 'Parità (0)'}</span></td>
+            <td>${primiera.you} pt</td>
+            <td>${primiera.opponent} pt</td>
+            <td><span class="pts-badge">${primiera.points.you > primiera.points.opponent ? 'Tu (+1)' : primiera.points.opponent > primiera.points.you ? oppName + ' (+1)' : 'Parità (0)'}</span></td>
           </tr>
           <tr>
             <td><strong>Scope</strong></td>
-            <td>${scope.player}</td>
-            <td>${scope.cpu}</td>
-            <td><span class="pts-badge">Tu: +${scope.player} | CPU: +${scope.cpu}</span></td>
+            <td>${scope.you}</td>
+            <td>${scope.opponent}</td>
+            <td><span class="pts-badge">Tu: +${scope.you} | ${oppName}: +${scope.opponent}</span></td>
           </tr>
         </tbody>
         <tfoot>
           <tr class="round-total-row">
             <td><strong>Punti Smazzata</strong></td>
-            <td><strong>+${roundTotal.player}</strong></td>
-            <td><strong>+${roundTotal.cpu}</strong></td>
+            <td><strong>+${roundTotal.you}</strong></td>
+            <td><strong>+${roundTotal.opponent}</strong></td>
             <td>—</td>
           </tr>
           <tr class="match-total-row">
-            <td><strong>Totale Partita</strong> (Obiettivo: ${this.engine.targetScore})</td>
-            <td class="total-pts-highlight">${matchScore.player}</td>
-            <td class="total-pts-highlight">${matchScore.cpu}</td>
+            <td><strong>Totale Partita</strong> (Obiettivo: ${this.match?.targetScore || 11})</td>
+            <td class="total-pts-highlight">${matchScore.you}</td>
+            <td class="total-pts-highlight">${matchScore.opponent}</td>
             <td>—</td>
           </tr>
         </tfoot>

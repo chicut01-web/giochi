@@ -18,6 +18,10 @@ let scopaView = null;
 function renderCurrentView(viewName, params = {}) {
   if (!appContainer) return;
 
+  if (viewName !== 'scopa' && scopaView) {
+    scopaView.cleanup();
+  }
+
   if (viewName === 'auth') {
     if (!authView) {
       authView = new AuthView(appContainer);
