@@ -13,6 +13,7 @@ export class ScopaView {
     this.match = null;
     this.view = null;
     this.unsubscribe = null;
+    this.isInitialized = false;
     this.pendingMoves = [];
     this.lastProcessedMoveKey = null;
     this.currentTurnKey = null;
@@ -41,6 +42,7 @@ export class ScopaView {
       this.match.destroy();
       this.match = null;
     }
+    this.isInitialized = false;
     this.view = null;
     this.pendingMoves = [];
     this.lastProcessedMoveKey = null;
@@ -122,9 +124,10 @@ export class ScopaView {
 
     const moveKey = this.getMoveKey(view);
 
-    // Primo aggiornamento della vista: sincronizza il tavolo senza rianimare mosse passate
-    if (this.lastProcessedMoveKey === null) {
-      this.lastProcessedMoveKey = moveKey;
+    // Primo aggiornamento della vista: inizializza il tavolo senza rianimare mosse pregresse
+    if (!this.isInitialized) {
+      this.isInitialized = true;
+      this.lastProcessedMoveKey = moveKey || '__init__';
       this.updateBoard();
       this.syncTurnState();
       return;
@@ -855,9 +858,13 @@ export class ScopaView {
 
     const chosenCombo = captureOptions.options.length > 0 ? captureOptions.options[0] : null;
     this.isSubmittingMove = true;
+    const cardBtn = document.getElementById(`player-card-${card.id}`);
+    if (cardBtn) cardBtn.classList.add('is-submitting');
+
     try {
       const res = await this.match.playCard(card.id, chosenCombo);
       if (!res.ok) {
+        if (cardBtn) cardBtn.classList.remove('is-submitting');
         this.handleMoveError(res.error);
       }
     } finally {
@@ -1108,31 +1115,31 @@ export class ScopaView {
         },
         { transform: `translate(${dx}px, ${dy}px) scale(1) rotate(${landingRot}deg)` }
       ], {
-        duration: 520,
+        duration: 460,
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards'
       });
       await Promise.race([
         anim.finished.catch(() => {}),
-        new Promise(r => setTimeout(r, 580))
+        new Promise(r => setTimeout(r, 500))
       ]);
     } else {
       const anim = flyEl.animate([
-        { transform: 'translate(0, 0) scale(0.88) rotateY(180deg)', opacity: 0.8 },
+        { transform: 'translate(0, 0) scale(0.88) rotate(0deg)', opacity: 0.8 },
         { 
-          transform: `translate(${dx * 0.45}px, ${dy * 0.45 + 24}px) scale(1.08) rotateY(90deg)`, 
+          transform: `translate(${dx * 0.45}px, ${dy * 0.45 + 24}px) scale(1.06) rotate(${(Math.random() - 0.5) * 6}deg)`, 
           opacity: 1, 
           offset: 0.45 
         },
-        { transform: `translate(${dx}px, ${dy}px) scale(1) rotateY(0deg) rotate(${landingRot}deg)`, opacity: 1 }
+        { transform: `translate(${dx}px, ${dy}px) scale(1) rotate(${landingRot}deg)`, opacity: 1 }
       ], {
-        duration: 540,
+        duration: 460,
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards'
       });
       await Promise.race([
         anim.finished.catch(() => {}),
-        new Promise(r => setTimeout(r, 600))
+        new Promise(r => setTimeout(r, 500))
       ]);
     }
 
@@ -1182,26 +1189,24 @@ export class ScopaView {
     soundFx.playDeal();
     const slideAnim = playedFlyEl.animate([
       { 
-        transform: `translate(0px, 0px) rotate(${startRot}deg) scale(1)`,
-        boxShadow: '0 16px 36px rgba(0, 0, 0, 0.7), 0 0 22px rgba(245, 197, 66, 0.5)'
+        transform: `translate(0px, 0px) rotate(${startRot}deg) scale(1)`
       },
       { 
         transform: `translate(${slideDx * 0.5}px, ${slideDy * 0.5 - 6}px) rotate(${startRot * 0.5 + finalRot * 0.5}deg) scale(1.02)`,
         offset: 0.5 
       },
       { 
-        transform: `translate(${slideDx}px, ${slideDy}px) rotate(${finalRot}deg) scale(1)`,
-        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.45)'
+        transform: `translate(${slideDx}px, ${slideDy}px) rotate(${finalRot}deg) scale(1)`
       }
     ], {
-      duration: 500,
+      duration: 400,
       easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
       fill: 'forwards'
     });
 
     await Promise.race([
       slideAnim.finished.catch(() => {}),
-      new Promise(r => setTimeout(r, 550))
+      new Promise(r => setTimeout(r, 440))
     ]);
   }
 

@@ -25,27 +25,36 @@ function deadline() {
   return new Date(Date.now() + TURN_SECONDS * 1000).toISOString();
 }
 
+// In-memory username cache for fast subsequent turns
+const usernameCache = new Map<string, string>();
+
 async function loadUsernames(ids: string[]) {
-  const { data } = await admin.from('profiles').select('id, username').in('id', ids);
+  const missing = ids.filter(id => !usernameCache.has(id));
+  if (missing.length > 0) {
+    const { data } = await admin.from('profiles').select('id, username').in('id', missing);
+    for (const row of data || []) {
+      if (row.id) usernameCache.set(row.id, row.username || 'Giocatore');
+    }
+  }
   const map: Record<string, string> = {};
-  for (const row of data || []) {
-    if (row.id) map[row.id] = row.username || 'Giocatore';
+  for (const id of ids) {
+    map[id] = usernameCache.get(id) || 'Giocatore';
   }
   return map;
 }
 
 // Compone la vista del chiamante leggendo sessione + mano propria
 async function viewFor(sessionId: string, userId: string) {
-  const { data: session } = await admin
-    .from('game_sessions').select('*').eq('id', sessionId).single();
+  const [sessionRes, handRes] = await Promise.all([
+    admin.from('game_sessions').select('*').eq('id', sessionId).single(),
+    admin.from('game_session_hands').select('hand').eq('session_id', sessionId).eq('user_id', userId).single()
+  ]);
+
+  const session = sessionRes.data;
   if (!session) return { error: 'session_not_found', status: 404 };
 
   const seat = session.player_a === userId ? 1 : session.player_b === userId ? 2 : null;
   if (!seat) return { error: 'not_a_participant', status: 403 };
-
-  const { data: handRow } = await admin
-    .from('game_session_hands').select('hand')
-    .eq('session_id', sessionId).eq('user_id', userId).single();
 
   const names = await loadUsernames([session.player_a, session.player_b]);
 
@@ -54,7 +63,7 @@ async function viewFor(sessionId: string, userId: string) {
     seat,
     view: buildView({
       publicState: session.public_state,
-      hand: handRow?.hand || [],
+      hand: handRes.data?.hand || [],
       seat,
       status: session.status,
       turnSeat: session.turn_seat,
@@ -134,17 +143,17 @@ Deno.serve(async (req) => {
         .select().single();
       if (insErr) throw insErr;
 
-      await admin.from('game_session_secrets')
-        .insert({ session_id: session.id, state: snapshot.secret });
-
-      await admin.from('game_session_hands').insert([
-        { session_id: session.id, user_id: invite.from_user_id, seat: 1, hand: snapshot.hands[1] },
-        { session_id: session.id, user_id: invite.to_user_id, seat: 2, hand: snapshot.hands[2] }
+      await Promise.all([
+        admin.from('game_session_secrets')
+          .insert({ session_id: session.id, state: snapshot.secret }),
+        admin.from('game_session_hands').insert([
+          { session_id: session.id, user_id: invite.from_user_id, seat: 1, hand: snapshot.hands[1] },
+          { session_id: session.id, user_id: invite.to_user_id, seat: 2, hand: snapshot.hands[2] }
+        ]),
+        admin.from('game_invites')
+          .update({ status: 'accepted', session_id: session.id, updated_at: new Date().toISOString() })
+          .eq('id', inviteId)
       ]);
-
-      await admin.from('game_invites')
-        .update({ status: 'accepted', session_id: session.id, updated_at: new Date().toISOString() })
-        .eq('id', inviteId);
 
       const created = await viewFor(session.id, user.id);
       if ('error' in created) return json({ error: created.error }, created.status);
@@ -154,22 +163,187 @@ Deno.serve(async (req) => {
     const sessionId = body.sessionId;
     if (!sessionId) return json({ error: 'missing_session' }, 400);
 
-    const ctx = await viewFor(sessionId, user.id);
-    if ('error' in ctx) return json({ error: ctx.error }, ctx.status);
-
     // --- state: lettura, all'avvio e come fallback del Realtime ---
     if (action === 'state') {
+      const ctx = await viewFor(sessionId, user.id);
+      if ('error' in ctx) return json({ error: ctx.error }, ctx.status);
       return json({ view: ctx.view });
     }
 
-    const session = ctx.session;
-    const seat = ctx.seat;
+    // --- move: esecuzione super veloce senza ri-query ridondanti ---
+    if (action === 'move') {
+      const [sessionRes, secretRes] = await Promise.all([
+        admin.from('game_sessions').select('*').eq('id', sessionId).single(),
+        admin.from('game_session_secrets').select('state').eq('session_id', sessionId).single()
+      ]);
+
+      const session = sessionRes.data;
+      if (!session) return json({ error: 'session_not_found' }, 404);
+      if (session.status !== 'active') return json({ error: 'match_not_active' }, 409);
+
+      const seat = session.player_a === user.id ? 1 : session.player_b === user.id ? 2 : null;
+      if (!seat) return json({ error: 'not_a_participant' }, 403);
+      if (session.turn_seat !== seat) return json({ error: 'not_your_turn' }, 403);
+
+      if (typeof body.version === 'number' && body.version !== session.version) {
+        const ctx = await viewFor(sessionId, user.id);
+        return json({ error: 'version_conflict', view: 'view' in ctx ? ctx.view : undefined }, 409);
+      }
+
+      if (!secretRes.data?.state) return json({ error: 'state_missing' }, 500);
+
+      const res = applyMove(secretRes.data.state, seat, body.cardId, body.chosenOption || null);
+      if (!res.ok) return json({ error: res.error }, 400);
+
+      const over = res.snapshot.public.isMatchOver;
+      const v = await persist(
+        session, res.snapshot,
+        over ? 'finished' : 'active',
+        over ? res.snapshot.public.matchWinnerSeat : null
+      );
+      if (v === -1) {
+        const ctx = await viewFor(sessionId, user.id);
+        return json({ error: 'version_conflict', view: 'view' in ctx ? ctx.view : undefined }, 409);
+      }
+
+      const names = await loadUsernames([session.player_a, session.player_b]);
+      const view = buildView({
+        publicState: res.snapshot.public,
+        hand: res.snapshot.hands[seat],
+        seat,
+        status: over ? 'finished' : 'active',
+        turnSeat: res.snapshot.turnSeat,
+        turnDeadline: over ? null : deadline(),
+        version: v,
+        usernames: {
+          1: names[session.player_a] || 'Giocatore 1',
+          2: names[session.player_b] || 'Giocatore 2'
+        },
+        mode: 'online',
+        turnSeconds: TURN_SECONDS
+      });
+
+      return json({ view });
+    }
+
+    // --- timeout: chiunque può invocarlo a scadenza avvenuta ---
+    if (action === 'timeout') {
+      const [sessionRes, secretRes] = await Promise.all([
+        admin.from('game_sessions').select('*').eq('id', sessionId).single(),
+        admin.from('game_session_secrets').select('state').eq('session_id', sessionId).single()
+      ]);
+
+      const session = sessionRes.data;
+      if (!session) return json({ error: 'session_not_found' }, 404);
+      if (session.status !== 'active') return json({ error: 'match_not_active' }, 409);
+
+      const seat = session.player_a === user.id ? 1 : session.player_b === user.id ? 2 : null;
+      if (!seat) return json({ error: 'not_a_participant' }, 403);
+
+      if (!session.turn_deadline || new Date(session.turn_deadline).getTime() > Date.now()) {
+        const ctx = await viewFor(sessionId, user.id);
+        return json({ error: 'not_expired', view: 'view' in ctx ? ctx.view : undefined }, 409);
+      }
+
+      if (!secretRes.data?.state) return json({ error: 'state_missing' }, 500);
+
+      const res = autoMove(secretRes.data.state, session.turn_seat);
+      if (!res.ok) return json({ error: res.error }, 400);
+
+      const over = res.snapshot.public.isMatchOver;
+      const v = await persist(
+        session, res.snapshot,
+        over ? 'finished' : 'active',
+        over ? res.snapshot.public.matchWinnerSeat : null
+      );
+      if (v === -1) {
+        const ctx = await viewFor(sessionId, user.id);
+        return json({ error: 'version_conflict', view: 'view' in ctx ? ctx.view : undefined }, 409);
+      }
+
+      const names = await loadUsernames([session.player_a, session.player_b]);
+      const view = buildView({
+        publicState: res.snapshot.public,
+        hand: res.snapshot.hands[seat],
+        seat,
+        status: over ? 'finished' : 'active',
+        turnSeat: res.snapshot.turnSeat,
+        turnDeadline: over ? null : deadline(),
+        version: v,
+        usernames: {
+          1: names[session.player_a] || 'Giocatore 1',
+          2: names[session.player_b] || 'Giocatore 2'
+        },
+        mode: 'online',
+        turnSeconds: TURN_SECONDS
+      });
+
+      return json({ view });
+    }
+
+    // --- next_round: smazzata successiva ---
+    if (action === 'next_round') {
+      const [sessionRes, secretRes] = await Promise.all([
+        admin.from('game_sessions').select('*').eq('id', sessionId).single(),
+        admin.from('game_session_secrets').select('state').eq('session_id', sessionId).single()
+      ]);
+
+      const session = sessionRes.data;
+      if (!session) return json({ error: 'session_not_found' }, 404);
+      if (session.status !== 'active') return json({ error: 'match_not_active' }, 409);
+      if (!session.public_state?.isRoundOver) return json({ error: 'round_not_over' }, 400);
+      if (session.public_state?.isMatchOver) return json({ error: 'match_already_over' }, 400);
+
+      const seat = session.player_a === user.id ? 1 : session.player_b === user.id ? 2 : null;
+      if (!seat) return json({ error: 'not_a_participant' }, 403);
+
+      if (!secretRes.data?.state) return json({ error: 'state_missing' }, 500);
+
+      const res = nextRound(secretRes.data.state);
+      if (!res.ok) return json({ error: res.error }, 400);
+
+      const v = await persist(session, res.snapshot, 'active', null);
+      if (v === -1) {
+        const ctx = await viewFor(sessionId, user.id);
+        return json({ error: 'version_conflict', view: 'view' in ctx ? ctx.view : undefined }, 409);
+      }
+
+      const names = await loadUsernames([session.player_a, session.player_b]);
+      const view = buildView({
+        publicState: res.snapshot.public,
+        hand: res.snapshot.hands[seat],
+        seat,
+        status: 'active',
+        turnSeat: res.snapshot.turnSeat,
+        turnDeadline: deadline(),
+        version: v,
+        usernames: {
+          1: names[session.player_a] || 'Giocatore 1',
+          2: names[session.player_b] || 'Giocatore 2'
+        },
+        mode: 'online',
+        turnSeconds: TURN_SECONDS
+      });
+
+      return json({ view });
+    }
 
     // --- concede: abbandono, vince l'altro ---
     if (action === 'concede') {
-      if (session.status !== 'active') return json({ view: ctx.view });
-      const { data: secretRow } = await admin
-        .from('game_session_secrets').select('state').eq('session_id', sessionId).single();
+      const [sessionRes, secretRes] = await Promise.all([
+        admin.from('game_sessions').select('*').eq('id', sessionId).single(),
+        admin.from('game_session_secrets').select('state').eq('session_id', sessionId).single()
+      ]);
+
+      const session = sessionRes.data;
+      if (!session) return json({ error: 'session_not_found' }, 404);
+      if (session.status !== 'active') {
+        const ctx = await viewFor(sessionId, user.id);
+        return json({ view: 'view' in ctx ? ctx.view : undefined });
+      }
+
+      const seat = session.player_a === user.id ? 1 : session.player_b === user.id ? 2 : null;
+      if (!seat) return json({ error: 'not_a_participant' }, 403);
 
       const opponentSeat = seat === 1 ? 2 : 1;
       const pubState = {
@@ -180,88 +354,34 @@ Deno.serve(async (req) => {
 
       const snapshot = {
         public: pubState,
-        secret: secretRow!.state,
+        secret: secretRes.data?.state,
         hands: { 1: [], 2: [] },
         turnSeat: session.turn_seat
       };
       const v = await persist(session, snapshot, 'abandoned', opponentSeat);
-      if (v === -1) return json({ error: 'version_conflict' }, 409);
-
-      const after = await viewFor(sessionId, user.id);
-      if ('error' in after) return json({ error: after.error }, after.status);
-      return json({ view: after.view });
-    }
-
-    // --- next_round: smazzata successiva (può invocarla chiunque a fine smazzata) ---
-    if (action === 'next_round') {
-      if (session.status !== 'active') return json({ error: 'match_not_active' }, 409);
-      if (!session.public_state.isRoundOver) return json({ error: 'round_not_over' }, 400);
-      if (session.public_state.isMatchOver) return json({ error: 'match_already_over' }, 400);
-
-      const { data: secretRow } = await admin
-        .from('game_session_secrets').select('state').eq('session_id', sessionId).single();
-      if (!secretRow) return json({ error: 'state_missing' }, 500);
-
-      const res = nextRound(secretRow.state);
-      if (!res.ok) return json({ error: res.error }, 400);
-
-      const v = await persist(session, res.snapshot, 'active', null);
-      if (v === -1) return json({ error: 'version_conflict' }, 409);
-
-      const after = await viewFor(sessionId, user.id);
-      if ('error' in after) return json({ error: after.error }, after.status);
-      return json({ view: after.view });
-    }
-
-    if (session.status !== 'active') return json({ error: 'match_not_active' }, 409);
-
-    const { data: secretRow } = await admin
-      .from('game_session_secrets').select('state').eq('session_id', sessionId).single();
-    if (!secretRow) return json({ error: 'state_missing' }, 500);
-
-    // --- move ---
-    if (action === 'move') {
-      if (session.turn_seat !== seat) return json({ error: 'not_your_turn' }, 403);
-      if (typeof body.version === 'number' && body.version !== session.version) {
-        return json({ error: 'version_conflict', view: ctx.view }, 409);
+      if (v === -1) {
+        const ctx = await viewFor(sessionId, user.id);
+        return json({ error: 'version_conflict', view: 'view' in ctx ? ctx.view : undefined }, 409);
       }
 
-      const res = applyMove(secretRow.state, seat, body.cardId, body.chosenOption || null);
-      if (!res.ok) return json({ error: res.error }, 400);
+      const names = await loadUsernames([session.player_a, session.player_b]);
+      const view = buildView({
+        publicState: pubState,
+        hand: [],
+        seat,
+        status: 'abandoned',
+        turnSeat: session.turn_seat,
+        turnDeadline: null,
+        version: v,
+        usernames: {
+          1: names[session.player_a] || 'Giocatore 1',
+          2: names[session.player_b] || 'Giocatore 2'
+        },
+        mode: 'online',
+        turnSeconds: TURN_SECONDS
+      });
 
-      const over = res.snapshot.public.isMatchOver;
-      const v = await persist(
-        session, res.snapshot,
-        over ? 'finished' : 'active',
-        over ? res.snapshot.public.matchWinnerSeat : null
-      );
-      if (v === -1) return json({ error: 'version_conflict' }, 409);
-
-      const after = await viewFor(sessionId, user.id);
-      if ('error' in after) return json({ error: after.error }, after.status);
-      return json({ view: after.view });
-    }
-
-    // --- timeout: chiunque può invocarlo, ma solo a scadenza avvenuta ---
-    if (action === 'timeout') {
-      if (!session.turn_deadline || new Date(session.turn_deadline).getTime() > Date.now()) {
-        return json({ error: 'not_expired', view: ctx.view }, 409);
-      }
-
-      const res = autoMove(secretRow.state, session.turn_seat);
-      if (!res.ok) return json({ error: res.error }, 400);
-
-      const over = res.snapshot.public.isMatchOver;
-      const v = await persist(
-        session, res.snapshot,
-        over ? 'finished' : 'active',
-        over ? res.snapshot.public.matchWinnerSeat : null
-      );
-      if (v === -1) return json({ error: 'version_conflict' }, 409);
-
-      const after = await viewFor(sessionId, user.id);
-      if ('error' in after) return json({ error: after.error }, after.status);
-      return json({ view: after.view });
+      return json({ view });
     }
 
     return json({ error: 'unknown_action' }, 400);
