@@ -69,6 +69,18 @@ class FriendsManager {
   }
 
   /**
+   * True se la RPC non esiste ancora sul database (script SQL non ancora eseguito)
+   */
+  isMissingFunction(error) {
+    if (!error) return false;
+    const code = error.code || '';
+    const msg = (error.message || '').toLowerCase();
+    return code === 'PGRST202' || code === '42883' ||
+           msg.includes('could not find the function') ||
+           msg.includes('function public.') && msg.includes('does not exist');
+  }
+
+  /**
    * Search other users by username
    */
   async searchUsers(query) {
@@ -116,31 +128,55 @@ class FriendsManager {
   }
 
   /**
-   * Send friend request to another user
+   * Send friend request to another user.
+   * Ritorna 'sent' | 'accepted' | 'already_friends'
    */
   async sendFriendRequest(receiverId) {
     const user = authManager.getUser();
     if (!user) throw new Error('Devi aver effettuato l\'accesso.');
     if (user.id === receiverId) throw new Error('Non puoi inviare una richiesta a te stesso.');
 
-    const { error } = await supabase
+    // Percorso principale: RPC atomica lato database
+    const { data, error } = await supabase.rpc('send_friend_request', {
+      target_user_id: receiverId
+    });
+
+    if (!error) {
+      await this.refreshAll();
+      return data || 'sent';
+    }
+
+    if (!this.isMissingFunction(error)) {
+      console.error('[FriendsManager] send_friend_request fallita:', error);
+      const reason = (error.message || '');
+      if (reason.includes('user_not_found')) {
+        throw new Error('Giocatore non trovato.');
+      }
+      if (reason.includes('self_request')) {
+        throw new Error('Non puoi inviare una richiesta a te stesso.');
+      }
+      throw new Error('Impossibile inviare la richiesta di amicizia. Riprova.');
+    }
+
+    // Fallback (script SQL non ancora eseguito): inserimento diretto
+    console.warn('[FriendsManager] RPC send_friend_request assente, uso il fallback. Esegui supabase_friends_fix.sql.');
+
+    const { error: insertErr } = await supabase
       .from('friend_requests')
-      .insert({
+      .upsert({
         sender_id: user.id,
         receiver_id: receiverId,
-        status: 'pending'
-      });
+        status: 'pending',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'sender_id,receiver_id' });
 
-    if (error) {
-      if (error.code === '23505') { // Unique violation
-        throw new Error('Richiesta già inviata o esistente.');
-      }
+    if (insertErr) {
+      console.error('[FriendsManager] Inserimento richiesta fallito:', insertErr);
       throw new Error('Impossibile inviare la richiesta di amicizia.');
     }
 
-    await this.fetchPendingRequests();
-    this.notifyListeners();
-    return true;
+    await this.refreshAll();
+    return 'sent';
   }
 
   /**
@@ -251,26 +287,54 @@ class FriendsManager {
     const user = authManager.getUser();
     if (!user) throw new Error('Non connesso.');
 
-    // Find request
+    // Percorso principale: RPC atomica (crea entrambe le righe di amicizia
+    // ed elimina la richiesta in un'unica transazione)
+    const { error } = await supabase.rpc('accept_friend_request', {
+      request_id: requestId
+    });
+
+    if (!error) {
+      await this.refreshAll();
+      return true;
+    }
+
+    if (!this.isMissingFunction(error)) {
+      console.error('[FriendsManager] accept_friend_request fallita:', error);
+      await this.refreshAll();
+      throw new Error('Errore durante l\'accettazione della richiesta.');
+    }
+
+    // Fallback (script SQL non ancora eseguito)
+    console.warn('[FriendsManager] RPC accept_friend_request assente, uso il fallback. Esegui supabase_friends_fix.sql.');
+
     const req = this.cachedIncomingRequests.find(r => r.id === requestId);
     if (!req) throw new Error('Richiesta non trovata.');
 
-    // Update status to accepted
+    // Prima l'amicizia, poi lo stato della richiesta: se l'amicizia fallisce
+    // la richiesta resta in sospeso invece di sparire senza effetto.
+    const { error: friendErr } = await supabase
+      .from('friendships')
+      .upsert(
+        [
+          { user_id: user.id, friend_id: req.sender_id },
+          { user_id: req.sender_id, friend_id: user.id }
+        ],
+        { onConflict: 'user_id,friend_id', ignoreDuplicates: true }
+      );
+
+    if (friendErr) {
+      console.error('[FriendsManager] Creazione amicizia fallita:', friendErr);
+      await this.refreshAll();
+      throw new Error('Amicizia non creata. Esegui lo script supabase_friends_fix.sql su Supabase.');
+    }
+
     const { error: updateErr } = await supabase
       .from('friend_requests')
       .update({ status: 'accepted', updated_at: new Date().toISOString() })
       .eq('id', requestId);
 
-    if (updateErr) throw new Error('Errore durante l\'accettazione.');
-
-    // Create bidirectional friendship rows
-    try {
-      await supabase.from('friendships').upsert([
-        { user_id: user.id, friend_id: req.sender_id },
-        { user_id: req.sender_id, friend_id: user.id }
-      ]);
-    } catch (err) {
-      console.warn('[FriendsManager] Creazione friendship parziale:', err);
+    if (updateErr) {
+      console.warn('[FriendsManager] Stato richiesta non aggiornato:', updateErr);
     }
 
     await this.refreshAll();
@@ -281,14 +345,25 @@ class FriendsManager {
    * Reject friend request
    */
   async rejectFriendRequest(requestId) {
-    const { error } = await supabase
-      .from('friend_requests')
-      .update({ status: 'rejected', updated_at: new Date().toISOString() })
-      .eq('id', requestId);
+    const { error } = await supabase.rpc('decline_friend_request', {
+      request_id: requestId
+    });
 
-    if (error) throw new Error('Errore nel rifiutare la richiesta.');
-    await this.fetchPendingRequests();
-    this.notifyListeners();
+    if (error) {
+      if (!this.isMissingFunction(error)) {
+        console.error('[FriendsManager] decline_friend_request fallita:', error);
+        throw new Error('Errore nel rifiutare la richiesta.');
+      }
+      // Fallback: elimina la riga (non basta lo status: il vincolo UNIQUE
+      // (sender_id, receiver_id) bloccherebbe per sempre un nuovo invio)
+      const { error: delErr } = await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('id', requestId);
+      if (delErr) throw new Error('Errore nel rifiutare la richiesta.');
+    }
+
+    await this.refreshAll();
     return true;
   }
 
@@ -296,14 +371,23 @@ class FriendsManager {
    * Cancel outgoing request
    */
   async cancelFriendRequest(requestId) {
-    const { error } = await supabase
-      .from('friend_requests')
-      .delete()
-      .eq('id', requestId);
+    const { error } = await supabase.rpc('decline_friend_request', {
+      request_id: requestId
+    });
 
-    if (error) throw new Error('Errore nell\'annullare la richiesta.');
-    await this.fetchPendingRequests();
-    this.notifyListeners();
+    if (error) {
+      if (!this.isMissingFunction(error)) {
+        console.error('[FriendsManager] Annullamento richiesta fallito:', error);
+        throw new Error('Errore nell\'annullare la richiesta.');
+      }
+      const { error: delErr } = await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('id', requestId);
+      if (delErr) throw new Error('Errore nell\'annullare la richiesta.');
+    }
+
+    await this.refreshAll();
     return true;
   }
 
@@ -314,10 +398,27 @@ class FriendsManager {
     const user = authManager.getUser();
     if (!user) return;
 
-    await supabase
-      .from('friendships')
-      .delete()
-      .or(`and(user_id.eq.${user.id},friend_id.eq.${friendUserId}),and(user_id.eq.${friendUserId},friend_id.eq.${user.id})`);
+    const { error } = await supabase.rpc('remove_friend', {
+      other_user_id: friendUserId
+    });
+
+    if (error) {
+      if (!this.isMissingFunction(error)) {
+        console.error('[FriendsManager] remove_friend fallita:', error);
+        throw new Error('Errore nella rimozione dell\'amico.');
+      }
+      // Fallback: almeno la propria riga (quella dell'altro resta finché non
+      // viene eseguito supabase_friends_fix.sql)
+      await supabase
+        .from('friendships')
+        .delete()
+        .or(`and(user_id.eq.${user.id},friend_id.eq.${friendUserId}),and(user_id.eq.${friendUserId},friend_id.eq.${user.id})`);
+
+      await supabase
+        .from('friend_requests')
+        .delete()
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendUserId}),and(sender_id.eq.${friendUserId},receiver_id.eq.${user.id})`);
+    }
 
     await this.refreshAll();
     return true;

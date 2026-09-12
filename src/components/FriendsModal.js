@@ -241,7 +241,11 @@ export class FriendsModal {
         const friendId = btn.getAttribute('data-friend-id');
         if (confirm('Vuoi rimuovere questo giocatore dai tuoi amici?')) {
           soundFx.playSnap();
-          await friendsManager.removeFriend(friendId);
+          try {
+            await friendsManager.removeFriend(friendId);
+          } catch (err) {
+            alert(err.message || 'Errore nella rimozione dell\'amico.');
+          }
         }
       });
     });
@@ -346,7 +350,9 @@ export class FriendsModal {
               ` : user.status === 'request_sent' ? `
                 <span class="status-badge badge-pending">⏳ Richiesta Inviata</span>
               ` : user.status === 'request_received' ? `
-                <span class="status-badge badge-notice">📬 Ti ha invitato</span>
+                <button class="action-btn accept-btn" data-action="send-request" data-user-id="${user.id}">
+                  <span>✓ Accetta</span>
+                </button>
               ` : `
                 <button class="action-btn send-req-btn" data-action="send-request" data-user-id="${user.id}">
                   <span>➕ Aggiungi</span>
@@ -368,9 +374,13 @@ export class FriendsModal {
         btn.innerHTML = '<span>Invio...</span>';
 
         try {
-          await friendsManager.sendFriendRequest(targetUserId);
+          const result = await friendsManager.sendFriendRequest(targetUserId);
           soundFx.playWin();
-          btn.outerHTML = `<span class="status-badge badge-pending">⏳ Richiesta Inviata</span>`;
+          if (result === 'accepted' || result === 'already_friends') {
+            btn.outerHTML = `<span class="status-badge badge-friend">✓ Amico</span>`;
+          } else {
+            btn.outerHTML = `<span class="status-badge badge-pending">⏳ Richiesta Inviata</span>`;
+          }
         } catch (err) {
           soundFx.playSnap();
           alert(err.message || 'Errore durante l\'invio della richiesta.');
@@ -460,7 +470,12 @@ export class FriendsModal {
         const reqId = btn.getAttribute('data-req-id');
         soundFx.playWin();
         btn.disabled = true;
-        await friendsManager.acceptFriendRequest(reqId);
+        try {
+          await friendsManager.acceptFriendRequest(reqId);
+        } catch (err) {
+          alert(err.message || 'Errore durante l\'accettazione.');
+          btn.disabled = false;
+        }
       });
     });
 
@@ -469,7 +484,12 @@ export class FriendsModal {
         const reqId = btn.getAttribute('data-req-id');
         soundFx.playSnap();
         btn.disabled = true;
-        await friendsManager.rejectFriendRequest(reqId);
+        try {
+          await friendsManager.rejectFriendRequest(reqId);
+        } catch (err) {
+          alert(err.message || 'Errore nel rifiutare la richiesta.');
+          btn.disabled = false;
+        }
       });
     });
 
@@ -479,7 +499,12 @@ export class FriendsModal {
         const reqId = btn.getAttribute('data-req-id');
         soundFx.playSnap();
         btn.disabled = true;
-        await friendsManager.cancelFriendRequest(reqId);
+        try {
+          await friendsManager.cancelFriendRequest(reqId);
+        } catch (err) {
+          alert(err.message || 'Errore nell\'annullare la richiesta.');
+          btn.disabled = false;
+        }
       });
     });
   }
