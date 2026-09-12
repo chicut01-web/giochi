@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ScopaEngine } from '../src/games/scopa/ScopaEngine.js';
-import { createMatch, applyMove, autoMove, buildView, SEAT_ROLE } from '../src/games/scopa/ScopaMatch.js';
+import { createMatch, applyMove, autoMove, buildView, nextRound, SEAT_ROLE } from '../src/games/scopa/ScopaMatch.js';
 
 test('createMatch produce mani da 3 carte e 4 carte sul tavolo', () => {
   const snap = createMatch(11);
@@ -100,4 +100,80 @@ test('buildView mostra la propria mano e solo il conteggio dell\'avversario', ()
   assert.equal(view.opponent.handCount, 3);
   assert.equal('hand' in view.opponent, false);
   assert.equal(view.isYourTurn, snap.turnSeat === 2);
+});
+
+test('nextRound rifiuta se la smazzata non è conclusa', () => {
+  const snap = createMatch(11);
+  const res = nextRound(snap.secret);
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'round_not_over');
+});
+
+test('nextRound avvia una nuova smazzata quando il round è concluso', () => {
+  const engine = new ScopaEngine({ targetScore: 11 });
+  engine.deck = [];
+  engine.playerHand = [];
+  engine.cpuHand = [];
+  engine.finishRound(); // isRoundOver = true, roundNumber = 1
+
+  const state = engine.serialize();
+  const res = nextRound(state);
+
+  assert.equal(res.ok, true);
+  assert.equal(res.snapshot.public.roundNumber, 2);
+  assert.equal(res.snapshot.public.isRoundOver, false);
+  assert.equal(res.snapshot.hands[1].length, 3);
+  assert.equal(res.snapshot.hands[2].length, 3);
+  assert.equal(res.snapshot.public.tableCards.length, 4);
+});
+
+test('buildView normalizza roundResult per Seat 1 e Seat 2', () => {
+  const engine = new ScopaEngine({ targetScore: 11 });
+  engine.deck = [];
+  engine.playerHand = [];
+  engine.cpuHand = [];
+  engine.playerCaptures = [{ id: 'denari_7', suit: 'denari', value: 7, isSettebello: true }];
+  engine.cpuCaptures = [];
+  engine.finishRound();
+
+  const snap = createMatch(11);
+  snap.public.roundResult = engine.roundScoreResult;
+
+  const viewSeat1 = buildView({
+    publicState: snap.public,
+    hand: [],
+    seat: 1,
+    status: 'active',
+    turnSeat: 1,
+    turnDeadline: null,
+    version: 1,
+    usernames: { 1: 'PlayerA', 2: 'PlayerB' },
+    mode: 'online',
+    turnSeconds: 25
+  });
+
+  const viewSeat2 = buildView({
+    publicState: snap.public,
+    hand: [],
+    seat: 2,
+    status: 'active',
+    turnSeat: 1,
+    turnDeadline: null,
+    version: 1,
+    usernames: { 1: 'PlayerA', 2: 'PlayerB' },
+    mode: 'online',
+    turnSeconds: 25
+  });
+
+  // Seat 1: player è you, cpu è opponent
+  assert.equal(viewSeat1.roundResult.settebello.you, true);
+  assert.equal(viewSeat1.roundResult.settebello.opponent, false);
+  assert.equal(viewSeat1.roundResult.settebello.points.you, 1);
+  assert.equal(viewSeat1.roundResult.settebello.points.opponent, 0);
+
+  // Seat 2: cpu è you, player è opponent
+  assert.equal(viewSeat2.roundResult.settebello.you, false);
+  assert.equal(viewSeat2.roundResult.settebello.opponent, true);
+  assert.equal(viewSeat2.roundResult.settebello.points.you, 0);
+  assert.equal(viewSeat2.roundResult.settebello.points.opponent, 1);
 });

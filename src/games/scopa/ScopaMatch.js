@@ -103,6 +103,77 @@ export function autoMove(secret, seat) {
   return applyMove(secret, seat, card.id, (decision && decision.chosenOption) || null);
 }
 
+// Inizia la smazzata successiva (reset tavolo, nuove mani, cambio mazziere)
+export function nextRound(secret) {
+  const engine = ScopaEngine.deserialize(secret);
+  if (!engine.isRoundOver) return { ok: false, error: 'round_not_over' };
+  if (engine.isMatchOver) return { ok: false, error: 'match_over' };
+
+  engine.initRound();
+  return { ok: true, snapshot: snapshotFromEngine(engine, null) };
+}
+
+// Normalizza il risultato di fine smazzata con prospettiva you/opponent
+function normalizeRoundResult(res, seat) {
+  if (!res) return null;
+  const myRole = SEAT_ROLE[seat];
+  const oppRole = myRole === 'player' ? 'cpu' : 'player';
+
+  return {
+    ...res,
+    carte: {
+      you: res.carte[myRole],
+      opponent: res.carte[oppRole],
+      points: { you: res.carte.points[myRole], opponent: res.carte.points[oppRole] },
+      player: res.carte.player,
+      cpu: res.carte.cpu
+    },
+    denari: {
+      you: res.denari[myRole],
+      opponent: res.denari[oppRole],
+      points: { you: res.denari.points[myRole], opponent: res.denari.points[oppRole] },
+      player: res.denari.player,
+      cpu: res.denari.cpu
+    },
+    settebello: {
+      you: res.settebello[myRole],
+      opponent: res.settebello[oppRole],
+      points: { you: res.settebello.points[myRole], opponent: res.settebello.points[oppRole] },
+      player: res.settebello.player,
+      cpu: res.settebello.cpu
+    },
+    primiera: {
+      you: res.primiera[myRole],
+      opponent: res.primiera[oppRole],
+      points: { you: res.primiera.points[myRole], opponent: res.primiera.points[oppRole] },
+      player: res.primiera.player,
+      cpu: res.primiera.cpu
+    },
+    scope: {
+      you: res.scope[myRole],
+      opponent: res.scope[oppRole],
+      points: { you: res.scope.points[myRole], opponent: res.scope.points[oppRole] },
+      player: res.scope.player,
+      cpu: res.scope.cpu
+    },
+    roundTotal: {
+      you: res.roundTotal[myRole],
+      opponent: res.roundTotal[oppRole],
+      player: res.roundTotal.player,
+      cpu: res.roundTotal.cpu
+    },
+    matchScore: {
+      you: res.matchScore[myRole],
+      opponent: res.matchScore[oppRole],
+      player: res.matchScore.player,
+      cpu: res.matchScore.cpu
+    },
+    isMatchOver: res.isMatchOver,
+    isWinner: res.matchWinner ? res.matchWinner === myRole : null,
+    matchWinner: res.matchWinner
+  };
+}
+
 // Vista normalizzata dal punto di vista di un solo giocatore
 export function buildView({
   publicState, hand, seat, status, turnSeat, turnDeadline,
@@ -139,7 +210,7 @@ export function buildView({
     turnDeadline: turnDeadline || null,
     turnSeconds,
     lastMove: publicState.lastMove,
-    roundResult: publicState.roundResult,
+    roundResult: normalizeRoundResult(publicState.roundResult, seat),
     isRoundOver: publicState.isRoundOver,
     isMatchOver: publicState.isMatchOver,
     matchWinnerSeat: publicState.matchWinnerSeat
