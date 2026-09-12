@@ -55,6 +55,8 @@ class PwaManager {
       try {
         const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         console.log('[PWA] Service Worker registrato con successo. Scope:', registration.scope);
+        // Force immediate check for updated Service Worker
+        try { registration.update(); } catch (e) {}
       } catch (err) {
         console.warn('[PWA] Service Worker non registrato:', err);
       }

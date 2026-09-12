@@ -370,7 +370,16 @@ export class ScopaView {
   }
 
   onTimerExpired(role) {
-    if (this.isProcessing || this.engine.isRoundOver) return;
+    if (this.engine.isRoundOver || this.engine.isMatchOver) return;
+
+    // The 10-second turn timer has expired.
+    // Unconditionally unlock isProcessing so the game can NEVER freeze at 0.
+    this.isProcessing = false;
+
+    if (this.cpuThinkingTimeout) {
+      clearTimeout(this.cpuThinkingTimeout);
+      this.cpuThinkingTimeout = null;
+    }
 
     if (role === 'player') {
       this.setNarrator('⌛', 'Tempo scaduto! Mossa automatica...');
@@ -382,16 +391,17 @@ export class ScopaView {
       const decision = ScopaAI.decideMove(this.engine.playerHand, this.engine.tableCards, this.engine);
       if (decision && decision.card) {
         this.playMoveSequence('player', decision.card, decision.chosenOption);
+      } else if (this.engine.playerHand && this.engine.playerHand.length > 0) {
+        this.playMoveSequence('player', this.engine.playerHand[0], null);
       }
     } else {
       // CPU auto trigger: execute immediately without waiting
-      if (this.cpuThinkingTimeout) {
-        clearTimeout(this.cpuThinkingTimeout);
-        this.cpuThinkingTimeout = null;
-      }
+      this.setNarrator('🤖', 'CPU effettua la giocata...');
       const decision = ScopaAI.decideMove(this.engine.cpuHand, this.engine.tableCards, this.engine);
       if (decision && decision.card) {
         this.playMoveSequence('cpu', decision.card, decision.chosenOption);
+      } else if (this.engine.cpuHand && this.engine.cpuHand.length > 0) {
+        this.playMoveSequence('cpu', this.engine.cpuHand[0], null);
       }
     }
   }
@@ -720,6 +730,7 @@ export class ScopaView {
     } catch (err) {
       console.error('Errore durante playMoveSequence:', err);
       this.isProcessing = false;
+      document.querySelectorAll('.flying-card-live').forEach(el => el.remove());
       this.updateBoard();
       this.startTurnTimer(this.engine.currentTurn);
       if (this.engine.currentTurn === 'cpu') {
@@ -846,11 +857,10 @@ export class ScopaView {
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards'
       });
-      try {
-        await anim.finished;
-      } catch (e) {
-        await new Promise(r => setTimeout(r, 520));
-      }
+      await Promise.race([
+        anim.finished.catch(() => {}),
+        new Promise(r => setTimeout(r, 580))
+      ]);
     } else {
       // CPU: flips smoothly down from top onto the green felt (540ms)
       const anim = flyEl.animate([
@@ -866,11 +876,10 @@ export class ScopaView {
         easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
         fill: 'forwards'
       });
-      try {
-        await anim.finished;
-      } catch (e) {
-        await new Promise(r => setTimeout(r, 540));
-      }
+      await Promise.race([
+        anim.finished.catch(() => {}),
+        new Promise(r => setTimeout(r, 600))
+      ]);
     }
 
     // Lock the card in its physical resting place on the green felt
@@ -939,11 +948,10 @@ export class ScopaView {
       fill: 'forwards'
     });
 
-    try {
-      await slideAnim.finished;
-    } catch (e) {
-      await new Promise(r => setTimeout(r, 500));
-    }
+    await Promise.race([
+      slideAnim.finished.catch(() => {}),
+      new Promise(r => setTimeout(r, 550))
+    ]);
   }
 
   /* Smooth Dynamic Vector Flight into the Player or CPU Capture Pile */
@@ -1005,7 +1013,10 @@ export class ScopaView {
         fill: 'forwards'
       });
 
-      return anim.finished.catch(() => {});
+      return Promise.race([
+        anim.finished.catch(() => {}),
+        new Promise(r => setTimeout(r, 680))
+      ]);
     });
 
     await Promise.all(animations);
@@ -1031,7 +1042,18 @@ export class ScopaView {
       this.cpuThinkingTimeout = null;
     }
 
-    if (this.engine.isRoundOver || this.engine.currentTurn !== 'cpu' || this.isProcessing) {
+    if (this.engine.isRoundOver || this.engine.isMatchOver) {
+      return;
+    }
+
+    if (this.engine.currentTurn !== 'cpu') {
+      return;
+    }
+
+    // If an animation, deal, or card sequence is currently in progress, retry in 120ms
+    // so the CPU turn is NEVER dropped!
+    if (this.isProcessing) {
+      this.cpuThinkingTimeout = setTimeout(() => this.triggerCpuTurn(), 120);
       return;
     }
 
@@ -1042,11 +1064,16 @@ export class ScopaView {
 
     this.cpuThinkingTimeout = setTimeout(() => {
       this.cpuThinkingTimeout = null;
-      if (this.engine.currentTurn !== 'cpu' || this.engine.isRoundOver) return;
+      if (this.engine.currentTurn !== 'cpu' || this.engine.isRoundOver || this.engine.isMatchOver) return;
+
+      // Force processing lock clear before starting move
+      this.isProcessing = false;
 
       const decision = ScopaAI.decideMove(this.engine.cpuHand, this.engine.tableCards, this.engine);
       if (decision && decision.card) {
         this.playMoveSequence('cpu', decision.card, decision.chosenOption);
+      } else if (this.engine.cpuHand && this.engine.cpuHand.length > 0) {
+        this.playMoveSequence('cpu', this.engine.cpuHand[0], null);
       }
     }, thinkingTime);
   }

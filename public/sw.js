@@ -1,5 +1,5 @@
 // Piuccia Games - Service Worker
-const CACHE_NAME = 'piuccia-games-v2';
+const CACHE_NAME = 'piuccia-games-v3';
 
 const CORE_ASSETS = [
   '/',
