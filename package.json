@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test",
     "sync:engine": "node scripts/sync-engine.mjs",
+    "deploy:scopa": "npm run sync:engine && supabase functions deploy scopa",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
